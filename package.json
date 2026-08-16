@@ -1,0 +1,50 @@
+{
+  "name": "@tosklight/markdown-manual-renderer",
+  "version": "0.1.0",
+  "description": "Render a folder of Obsidian-flavored Markdown as an offline HTML manual and PDF.",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "markdown-manual": "dist/cli.js"
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "prepare": "npm run build"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "dependencies": {
+    "@mermaid-js/mermaid-cli": "^11.16.0",
+    "@react-pdf/renderer": "^4.3.1",
+    "fflate": "^0.8.2",
+    "mermaid": "^11.16.1",
+    "pdf-lib": "^1.17.1",
+    "puppeteer": "^25.7.0",
+    "react": "^19.1.1",
+    "remark-gfm": "^4.0.1",
+    "remark-parse": "^11.0.0",
+    "unified": "^11.0.5",
+    "unist-util-visit": "^5.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.30",
+    "@types/react": "^19.1.8",
+    "typescript": "^5.8.3",
+    "vitest": "^4.0.0"
+  },
+  "license": "MIT"
+}
