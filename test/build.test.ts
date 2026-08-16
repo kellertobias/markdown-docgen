@@ -32,6 +32,8 @@ flowchart LR
 `);
     await writeFile(path.join(source, "01-Chapter", "index.md"), `# Operations
 
+## Prepare
+
 | Control | Result |
 | --- | --- |
 | Go | Starts |
@@ -82,6 +84,8 @@ example
     expect(html).toContain("Software version: 9.8.7");
     expect(html).toContain('class="mermaid-diagram"');
     expect(html).toContain('manual-page-content columns-2');
+    expect(html).toContain('class="manual-section-divider"');
+    expect(html).toContain('<h2 id="page-01-chapter-index-md-prepare">Prepare</h2>');
     expect(html).toContain('manual-key-record');
     expect(html).toContain("<svg");
     expect(html).not.toContain("flowchart LR");

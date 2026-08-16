@@ -2,6 +2,31 @@
   "name": "@tosklight/markdown-manual-renderer",
   "version": "0.1.0",
   "description": "Render a folder of Obsidian-flavored Markdown as an offline HTML manual and PDF.",
+  "keywords": [
+    "markdown",
+    "manual",
+    "documentation",
+    "obsidian",
+    "mermaid",
+    "pdf",
+    "react-pdf"
+  ],
+  "author": {
+    "name": "Tobias S. Keller",
+    "url": "https://tobisk.de"
+  },
+  "homepage": "https://github.com/kellertobias/md-docs-gen#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kellertobias/md-docs-gen.git"
+  },
+  "bugs": {
+    "url": "https://github.com/kellertobias/md-docs-gen/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -16,13 +41,24 @@
   },
   "files": [
     "dist",
+    "examples/basic/build.mjs",
+    "examples/basic/docs",
+    "examples/basic/manual-hooks.mjs",
+    "examples/basic/manual.config.json",
+    "LICENSE",
     "README.md"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
+    "audit:runtime": "npm audit --omit=dev",
+    "ci": "npm run typecheck && npm test && npm run build && npm run pack:check && npm run audit:runtime",
+    "example": "npm run build && node examples/basic/build.mjs",
+    "pack:check": "npm pack --dry-run",
+    "release:dry-run": "semantic-release --dry-run --no-ci",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "prepare": "npm run build"
+    "prepare": "npm run build",
+    "prepublishOnly": "npm run ci"
   },
   "engines": {
     "node": ">=22"
@@ -41,8 +77,15 @@
     "unist-util-visit": "^5.0.0"
   },
   "devDependencies": {
+    "@semantic-release/changelog": "^6.0.3",
+    "@semantic-release/commit-analyzer": "^13.0.1",
+    "@semantic-release/git": "^10.0.1",
+    "@semantic-release/npm": "^13.1.5",
+    "@semantic-release/release-notes-generator": "^14.1.1",
     "@types/node": "^22.15.30",
     "@types/react": "^19.1.8",
+    "conventional-changelog-conventionalcommits": "^7.0.2",
+    "semantic-release": "^25.0.9",
     "typescript": "^5.8.3",
     "vitest": "^4.0.0"
   },

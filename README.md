@@ -11,6 +11,26 @@ It supports headings, paragraphs, emphasis, code, links, local images, tables, n
 task lists, blockquotes, Obsidian callouts, `[[wikilinks]]`, environment placeholders, and
 build-time Mermaid diagrams. Raw Markdown HTML is not executed.
 
+> [!IMPORTANT]
+> This project was vibe coded to solve a particular documentation problem in ToskLight. It was
+> built through rapid, AI-assisted iteration against that manual rather than designed from a
+> complete general-purpose publishing specification. The repository includes automated and visual
+> checks, but adopters should review generated documents carefully and expect to adapt hooks and
+> configuration for their own publishing requirements.
+
+## Try the example
+
+The repository contains a complete small manual under [`examples/basic`](examples/basic). After
+installing dependencies, render it with:
+
+```sh
+npm run example
+```
+
+This writes offline HTML, a ZIP, and an A4 PDF under `examples/basic/output/`. The example covers
+folder-derived heading levels, Obsidian callouts, environment placeholders, Mermaid, tables, and a
+custom render hook.
+
 ## CLI
 
 ```sh
@@ -92,6 +112,12 @@ and callouts span both columns. With `hierarchyHeadings` enabled, a folder index
 heading level, an ordinary file is one level deeper, and nested folders deepen the hierarchy even
 when they have no index. `maxHeadingDepth` caps the effective level.
 
+Every top-level folder index becomes a dedicated section-divider page in PDF and a full-height
+divider in HTML. If a standalone image is immediately before or after that index's H1, the image
+stays with the centered title. With hierarchical headings enabled, effective H2 headings are
+rendered as labelled chapters, H3 headings as ruled sections, H4 headings in the accent color, and
+H5 headings as compact subheads.
+
 ## Render hooks
 
 Hook modules are resolved relative to the configuration file. They export one hook, an array of
@@ -161,7 +187,30 @@ npm install
 npm run typecheck
 npm test
 npm run build
+npm run example
 ```
 
 The package targets Node.js 22 or newer. It does not fetch remote images, execute raw Markdown
 HTML, or allow local Markdown assets to escape the supplied source root.
+
+## Releases
+
+Forgejo is authoritative for `main`, release commits, and `vX.Y.Z` tags. Its configured mirror
+delivers those commits and tags to GitHub. Forgejo CI runs semantic-release after typecheck, tests,
+build, and package inspection; it updates `package.json`, `package-lock.json`, and `CHANGELOG.md`,
+then creates the release commit and tag. GitHub Actions rebuilds a mirrored tag, publishes
+`@tosklight/markdown-manual-renderer` through npm trusted publishing, and creates the GitHub Release.
+No npm token is stored in the repository.
+
+Conventional Commits control releases: `fix:` and `perf:` create a patch, `feat:` creates a minor,
+and `!` or a `BREAKING CHANGE:` footer creates a major. Documentation, tests, refactors, build, CI,
+and chores do not release by default. Preview the next release locally with
+`npm run release:dry-run`; it requires access to full repository history and the Forgejo remote but
+does not publish in dry-run mode. The remote is private, so the local Git credentials must be able
+to read it.
+
+Publishing requires two repository-side settings:
+
+- Forgejo secret `SEMANTIC_RELEASE_TOKEN`, scoped to push the release commit and tags.
+- An npm trusted publisher for package `@tosklight/markdown-manual-renderer`, GitHub repository
+  `kellertobias/md-docs-gen`, workflow `.github/workflows/release.yml`.

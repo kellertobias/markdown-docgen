@@ -1,0 +1,61 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
+      - run: npm run example
+      - name: Verify package contents
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.txt
+          grep -q "dist/cli.js" pack.txt
+          grep -q "examples/basic/manual.config.json" pack.txt
+
+  release:
+    needs: [build-and-test]
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: release-${{ github.ref }}
+      cancel-in-progress: false
+    steps:
+      - name: Require release token
+        env:
+          SEMANTIC_RELEASE_TOKEN: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+        run: |
+          if [ -z "$SEMANTIC_RELEASE_TOKEN" ]; then
+            echo "::error::SEMANTIC_RELEASE_TOKEN must be able to push the release commit and tags."
+            exit 1
+          fi
+      - name: Checkout release branch
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.SEMANTIC_RELEASE_TOKEN }}
+      - name: Configure release identity
+        run: |
+          git config user.name "md-docs-gen-release[bot]"
+          git config user.email "md-docs-gen-release[bot]@users.noreply.git.tokenet.de"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Compute version, commit, and tag
+        run: npx semantic-release --no-ci

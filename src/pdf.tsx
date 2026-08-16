@@ -21,8 +21,9 @@ const base = StyleSheet.create({
   body: { flexGrow: 1 },
   h1: { fontFamily: "Helvetica-Bold", fontSize: 23, lineHeight: 1.12 },
   h2: { fontFamily: "Helvetica-Bold", fontSize: 16, lineHeight: 1.18 },
-  h3: { fontFamily: "Helvetica-Bold", fontSize: 12, lineHeight: 1.2, marginTop: 10, marginBottom: 5 },
-  h4: { fontFamily: "Helvetica-Bold", fontSize: 10, marginTop: 8, marginBottom: 4 },
+  h3: { fontFamily: "Helvetica-Bold", fontSize: 15, lineHeight: 1.18 },
+  h4: { fontFamily: "Helvetica-Bold", fontSize: 11, marginTop: 9, marginBottom: 5 },
+  h5: { fontFamily: "Helvetica-Bold", fontSize: 10, marginTop: 8, marginBottom: 4 },
   paragraph: { marginBottom: 6, orphans: 2, widows: 2 },
   code: { fontFamily: "Courier", fontSize: 7.4, lineHeight: 1.35, padding: 8, marginVertical: 5 },
   inlineCode: { fontFamily: "Courier", fontSize: 8 },
@@ -49,7 +50,7 @@ const base = StyleSheet.create({
   coverSubtitle: { maxWidth: 400, marginTop: 14, fontSize: 14, lineHeight: 1.35 },
   coverVersion: { marginTop: 38, fontSize: 9 },
   chapterHeading: { marginBottom: 14, padding: 14, borderTopWidth: 5 },
-  sectionHeading: { marginTop: 13, marginBottom: 7, paddingLeft: 9, borderLeftWidth: 3 },
+  sectionHeading: { marginTop: 13, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 5, flexDirection: "row", alignItems: "center" },
   keySequence: { fontFamily: "Helvetica-Bold", fontSize: 7.2 },
   keyRegular: { backgroundColor: "#20272e", color: "#f4f7f9" },
   keyRecord: { backgroundColor: "#421116", color: "#ff8b93" },
@@ -79,6 +80,13 @@ function plain(node: ManualNode): string {
 
 function localImage(context: PdfContext, url: string): string {
   return path.resolve(path.dirname(context.page.absolutePath), decodeURIComponent(url.split("#", 1)[0]));
+}
+
+function standaloneImage(node: ManualNode): ManualNode | undefined {
+  if (node.type === "image" || node.type === "wikiImage") return node;
+  if (node.type !== "paragraph") return undefined;
+  const meaningful = (node.children ?? []).filter((child) => child.type !== "text" || child.value?.trim());
+  return meaningful.length === 1 && ["image", "wikiImage"].includes(meaningful[0].type) ? meaningful[0] : undefined;
 }
 
 function keyPresentation(node: ManualNode): React.ReactNode | undefined {
@@ -163,10 +171,10 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     case "heading": {
       const heading = context.page.headings[context.headingIndex++];
       const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
-      if (depth === 1) return <View key={key} id={heading.id} wrap={false} style={[base.chapterHeading, { borderColor: context.config.theme.accent, backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: context.config.theme.accent, letterSpacing: 1.6 }}>CHAPTER</Text><Text style={[base.h1, { marginTop: 5, color: context.config.theme.navigationInk }]}>{inlineNodes(node.children, context)}</Text></View>;
-      if (depth === 2) return <View key={key} id={heading.id} wrap={false} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h2, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text></View>;
-      const style = depth === 3 ? base.h3 : base.h4;
-      return <Text key={key} id={heading.id} minPresenceAhead={24} style={[style, { color: context.config.theme.navigationBackground }]}>{inlineNodes(node.children, context)}</Text>;
+      if (depth <= 2) return <View key={key} id={heading.id} wrap={false} style={[base.chapterHeading, { borderColor: context.config.theme.accent, backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: context.config.theme.accent, letterSpacing: 1.6 }}>CHAPTER</Text><Text style={[base.h1, { marginTop: 5, color: context.config.theme.navigationInk }]}>{inlineNodes(node.children, context)}</Text></View>;
+      if (depth === 3) return <View key={key} id={heading.id} wrap={false} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h3, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text><View style={{ flexGrow: 1, marginLeft: 10, borderBottomWidth: 2, borderColor: context.config.theme.accent }} /></View>;
+      if (depth === 4) return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h4, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text>;
+      return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h5, { color: context.config.theme.navigationBackground }]}>{inlineNodes(node.children, context)}</Text>;
     }
     case "code": return <Text key={key} style={[base.code, { backgroundColor: context.config.theme.codeBackground, color: "#e5f8f5" }]}>{node.value || " "}</Text>;
     case "mermaid": {
@@ -198,7 +206,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
   }
 }
 
-interface ContentChunk { page: SourcePage; nodes: ManualNode[]; headingIndex: number }
+interface ContentChunk { page: SourcePage; nodes: ManualNode[]; headingIndex: number; divider?: boolean }
 interface TocEntry { id: string; title: string; depth: number; pageNumber: number }
 
 function Contents({ chunks, config }: { chunks: TocEntry[][]; config: ResolvedConfig }): React.ReactElement {
@@ -222,6 +230,15 @@ function splitColumns(nodes: ManualNode[]): [ManualNode[], ManualNode[]] {
 
 function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; model: ManualModel; config: ResolvedConfig; index: number }): React.ReactElement {
   const context: PdfContext = { model, page: chunk.page, config, headingIndex: chunk.headingIndex, listDepth: 0 };
+  if (chunk.divider) {
+    const headingNode = chunk.nodes.find((node) => node.type === "heading")!;
+    const heading = chunk.page.headings[chunk.headingIndex];
+    const headingPosition = chunk.nodes.indexOf(headingNode);
+    const before = chunk.nodes.slice(0, headingPosition).map(standaloneImage).filter((node): node is ManualNode => Boolean(node));
+    const after = chunk.nodes.slice(headingPosition + 1).map(standaloneImage).filter((node): node is ManualNode => Boolean(node));
+    const imageView = (node: ManualNode, position: string) => <Image key={position} src={localImage(context, node.url ?? "")} style={{ width: 150, height: 150, objectFit: "contain", marginVertical: 28 }} />;
+    return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.page.title} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]}><View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} /><View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>{before.map((node, imageIndex) => imageView(node, `before-${imageIndex}`))}<Text id={heading.id} style={{ maxWidth: 460, fontFamily: "Helvetica-Bold", fontSize: 34, lineHeight: 1.08, textAlign: "center" }}>{plain(headingNode)}</Text><View style={{ width: 90, height: 4, marginTop: 20, backgroundColor: config.theme.accent }} />{after.map((node, imageIndex) => imageView(node, `after-${imageIndex}`))}</View></Page>;
+  }
   const first = chunk.nodes[0];
   const spansColumns = config.layout.columns === 2 && first?.type === "heading" && Number(first.data?.effectiveDepth ?? first.depth ?? 1) <= 2;
   const bodyNodes = spansColumns ? chunk.nodes.slice(1) : chunk.nodes;
@@ -264,10 +281,21 @@ function estimateNode(node: ManualNode): number {
 
 function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
   const chunks: ContentChunk[] = [];
-  const expanded = page.nodes.flatMap(splitLongTable);
+  let sourceNodes = page.nodes;
+  let headingIndex = 0;
+  const isTopLevelIndex = page.isChapter && page.relativePath.split("/").length === 2;
+  if (isTopLevelIndex) {
+    const titleIndex = sourceNodes.findIndex((node) => node.type === "heading" && Number(node.depth ?? 1) === 1);
+    const dividerIndexes = new Set([titleIndex]);
+    if (titleIndex > 0 && standaloneImage(sourceNodes[titleIndex - 1])) dividerIndexes.add(titleIndex - 1);
+    if (titleIndex >= 0 && standaloneImage(sourceNodes[titleIndex + 1])) dividerIndexes.add(titleIndex + 1);
+    chunks.push({ page, nodes: sourceNodes.filter((_, index) => dividerIndexes.has(index)), headingIndex: 0, divider: true });
+    sourceNodes = sourceNodes.filter((_, index) => !dividerIndexes.has(index));
+    headingIndex = 1;
+  }
+  const expanded = sourceNodes.flatMap(splitLongTable);
   const maximum = config.layout.columns === 2 ? 88 : 56;
   let start = 0;
-  let headingIndex = 0;
   while (start < expanded.length) {
     let end = start;
     let weight = 0;
@@ -276,7 +304,7 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
       if (end > start && weight + candidateWeight > maximum) break;
       weight += candidateWeight;
       end += 1;
-      if (expanded[end - 1]?.type === "table") break;
+      if (expanded[end - 1]?.type === "table" && expanded[end - 1]?.data?.continueAfterTable !== true) break;
     }
     const nodes = expanded.slice(start, end);
     chunks.push({ page, nodes, headingIndex });
@@ -315,7 +343,7 @@ export async function renderPdf(model: ManualModel, config: ResolvedConfig): Pro
   const toc: TocEntry[][] = [];
   for (let index = 0; index < tocEntries.length; index += 36) toc.push(tocEntries.slice(index, index + 36));
   if (!toc.length) toc.push([]);
-  const headers = ["", ...toc.map(() => "Contents"), ...content.map((chunk) => chunk.page.chapterTitle)];
+  const headers = ["", ...toc.map(() => "Contents"), ...content.map((chunk) => chunk.divider ? "" : chunk.page.chapterTitle)];
   await renderToFile(<ManualDocument model={model} config={config} content={content} toc={toc} />, config.output.pdf);
   await stampRunningFurniture(config, headers);
 }

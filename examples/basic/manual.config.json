@@ -1,0 +1,32 @@
+{
+  "title": "Example Manual",
+  "subtitle": "HTML and PDF from Markdown",
+  "author": "Markdown Manual Renderer",
+  "version": "${EXAMPLE_VERSION}",
+  "description": "A compact example of the standalone documentation renderer.",
+  "chapterIndexNames": ["index.md"],
+  "output": {
+    "htmlDir": "output/html",
+    "htmlArchive": "output/example-manual-html.zip",
+    "pdf": "output/example-manual.pdf"
+  },
+  "theme": {
+    "accent": "#0f8f82",
+    "navigationBackground": "#071621"
+  },
+  "pdf": {
+    "pageSize": "A4",
+    "contentsDepth": 4,
+    "header": "{chapter}",
+    "footer": "Example Manual"
+  },
+  "layout": {
+    "columns": 1,
+    "hierarchyHeadings": true,
+    "justifyText": true
+  },
+  "inlineTokens": [
+    { "pattern": "\\[([A-Z]+)\\]", "kind": "key" }
+  ],
+  "hookModules": ["manual-hooks.mjs"]
+}
