@@ -1,3 +1,7 @@
+## <small>1.3.2 (2026-08-17)</small>
+
+* fix: render shift chords without plus separators ([8138aa6](https://git.tokenet.de/opensource/md-docs-gen/commit/8138aa6))
+
 ## <small>1.3.1 (2026-08-17)</small>
 
 * fix: refine control rendering and table pagination ([9e7fd3c](https://git.tokenet.de/opensource/md-docs-gen/commit/9e7fd3c))
