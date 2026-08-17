@@ -73,10 +73,10 @@ const base = StyleSheet.create({
   keyKeyboard: { borderColor: "#d8dee5", borderBottomColor: "#8b98a4", backgroundColor: "#ffffff", color: "#17202a", fontFamily: "Courier-Bold" },
   keyShift: { borderColor: "#8d99a6", borderBottomColor: "#20272e", backgroundColor: "#39434d", color: "#ffffff" },
   richLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
-  keyBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2.2, borderRadius: 5 },
+  keyBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 3.5, paddingVertical: 1.8, borderWidth: 0.7, borderBottomWidth: 1.8, borderRadius: 4 },
   keyGroup: { flexDirection: "row", alignItems: "center" },
-  commandBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2, borderRadius: 5, borderColor: "#aeb8c2", backgroundColor: "#4b5563" },
-  controlBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 0.8, borderRadius: 6, borderColor: "#334554", backgroundColor: "#071621" },
+  commandBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 3.5, paddingVertical: 1.8, borderWidth: 0.7, borderRadius: 4, borderColor: "#aeb8c2", backgroundColor: "#4b5563" },
+  controlBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 2.5, paddingVertical: 1.5, borderWidth: 0.7, borderRadius: 4.5, borderColor: "#334554", backgroundColor: "#071621" },
 });
 
 interface PdfContext {
@@ -142,7 +142,7 @@ function keyBoxes(keys: ManualKey[], prefix: string): React.ReactNode {
   return <View style={base.keyGroup}>{keys.map((key, index) => {
     const icon = key.icon === "shift" ? "⇧" : key.icon === "backspace" ? "⌫" : "";
     const style = keyStyle(key) as { color?: string };
-    return <React.Fragment key={`${prefix}-${key.label}-${index}`}>{index ? <Text style={{ marginHorizontal: 2, color: "#64748b", fontSize: 6.8 }}>+</Text> : null}<View style={[base.keyBox, style]}><Text style={{ fontFamily: key.variant === "keyboard" ? "Courier-Bold" : "Helvetica-Bold", fontSize: 7.3, color: style.color ?? "#f4f7f9" }}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon} </Text> : null}{key.label}</Text></View></React.Fragment>;
+    return <React.Fragment key={`${prefix}-${key.label}-${index}`}>{index ? <Text style={{ marginHorizontal: 1.4, color: "#64748b", fontSize: 6.8 }}>+</Text> : null}<View style={[base.keyBox, style]}><Text style={{ fontFamily: key.variant === "keyboard" ? "Courier-Bold" : "Helvetica-Bold", fontSize: 7.1, color: style.color ?? "#f4f7f9" }}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon}</Text> : null}{icon && key.label ? " " : null}{key.label}</Text></View></React.Fragment>;
   })}</View>;
 }
 
@@ -177,7 +177,7 @@ function flowNodes(nodes: ManualNode[] | undefined, context: PdfContext, inherit
         const sequence = presentation as ManualControlSequencePresentation;
         return [<View key={key} style={base.controlBox}>{sequence.segments.map((segment, segmentIndex) => segment.keys
         ? <React.Fragment key={`${key}-${segmentIndex}`}>{keyBoxes(segment.keys, `${key}-${segmentIndex}`)}</React.Fragment>
-        : <Text key={`${key}-${segmentIndex}`} style={{ fontFamily: "Courier-Bold", fontSize: 7.4, color: "#f4f7f9" }}>{segment.text}</Text>)}</View>];
+        : segment.text?.trim() ? <Text key={`${key}-${segmentIndex}`} style={{ marginHorizontal: 2, fontFamily: "Courier-Bold", fontSize: 7.4, color: "#f4f7f9" }}>{segment.text.trim()}</Text> : null)}</View>];
       }
       return [<Text key={key} style={[base.inlineCode, inherited, { color: context.config.theme.accent }]}>{node.value}</Text>];
     }
@@ -457,7 +457,7 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
       if (end > start && weight + candidateWeight > maximum) break;
       weight += candidateWeight;
       end = unitEnd;
-      if (expanded[end - 1]?.type === "table" && expanded[end - 1]?.data?.continueAfterTable !== true) break;
+      if (expanded[end - 1]?.type === "table" && (Number(expanded[end - 1]?.data?.tableParts ?? 1) > 1 || expanded[end - 1]?.data?.continueAfterTable !== true)) break;
       if (expanded[end - 1]?.type === "list" && hasPresentation(expanded[end - 1].children) && estimateNode(expanded[end - 1]) > 35) break;
     }
     const nodes = expanded.slice(start, end);

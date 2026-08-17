@@ -73,7 +73,7 @@ example
     if (node.type === "inlineCode" && node.value.includes("[REC]")) return { ...node, data: { ...node.data, presentation: { component: "control-sequence", segments: [{ text: "1 " }, { keys: [{ label: "REC", variant: "record" }] }] } } };
     if (node.type === "inlineToken") {
       const icon = node.value === "SHIFT" ? "shift" : node.value === "BACK" ? "backspace" : undefined;
-      return { ...node, data: { ...node.data, presentation: { component: "key-sequence", keys: [{ label: node.value, icon, variant: node.value === "REC" ? "record" : "regular" }] } } };
+      return { ...node, data: { ...node.data, presentation: { component: "key-sequence", keys: [{ label: icon ? "" : node.value, icon, variant: node.value === "REC" ? "record" : "regular" }] } } };
     }
   },
 };\n`);
@@ -122,6 +122,10 @@ example
     expect(html).toContain('style="width:72%"');
     expect(html).toContain('class="manual-command-line"');
     expect(html).toContain('class="manual-control-sequence"');
+    expect(html).toContain('aria-label="Shift"');
+    expect(html).toContain('aria-label="Backspace"');
+    expect(html).not.toContain('<span>SHIFT</span>');
+    expect(html).not.toContain('<span>BACK</span>');
     expect(html).not.toContain("#&gt; FIXTURE");
     expect(html).toContain('M8 1.7 2.2 7.3');
     expect(html).toContain('M6.2 3H14v10');
