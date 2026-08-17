@@ -1,3 +1,7 @@
+## 1.3.0 (2026-08-17)
+
+* feat: improve control rendering and contents directives ([aa0bd87](https://git.tokenet.de/opensource/md-docs-gen/commit/aa0bd87))
+
 ## 1.2.0 (2026-08-17)
 
 * feat: add image sizing and heading pagination ([5d654f8](https://git.tokenet.de/opensource/md-docs-gen/commit/5d654f8))
