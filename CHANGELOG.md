@@ -1,3 +1,7 @@
+## <small>1.3.4 (2026-08-17)</small>
+
+* fix: refine shift chord vertical alignment ([6d050c8](https://git.tokenet.de/opensource/md-docs-gen/commit/6d050c8))
+
 ## <small>1.3.3 (2026-08-17)</small>
 
 * fix: tighten shift chord overlap ([56bf33e](https://git.tokenet.de/opensource/md-docs-gen/commit/56bf33e))
