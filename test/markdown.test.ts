@@ -70,4 +70,32 @@ describe("Obsidian Markdown extensions", () => {
       ["Commands", [2, 3]],
     ]);
   });
+
+  it("applies validated table directives directly before tables", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "manual-table-directive-"));
+    await writeFile(path.join(root, "index.md"), `# Tables
+
+<!-- table: columns=1,3; rows-per-page=8; row-weight=1.25; continue-after-table -->
+| Short | Long description |
+| --- | --- |
+| A | B |
+`);
+    const model = await loadManual(root);
+    const table = model.pages[0].nodes.find((node) => node.type === "table");
+    expect(table?.data).toMatchObject({
+      columnWidths: [1, 3],
+      rowsPerPage: 8,
+      rowWeight: 1.25,
+      continueAfterTable: true,
+    });
+    expect(model.pages[0].nodes.some((node) => node.type === "html")).toBe(false);
+
+    await writeFile(path.join(root, "index.md"), `# Tables
+
+<!-- table: columns=1,2,3 -->
+| A | B |
+| --- | --- |
+`);
+    await expect(loadManual(root)).rejects.toThrow("defines 3 columns, but the table has 2");
+  });
 });

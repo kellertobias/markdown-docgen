@@ -9,6 +9,7 @@ import type { ManualMermaidConfig } from "./types.js";
 import { expandEnvironment } from "./environment.js";
 import { renderMermaidNodes } from "./mermaid.js";
 import { applyRenderHooks } from "./hooks.js";
+import { applyTableDirectives } from "./tables.js";
 
 type AstNode = ManualNode & { position?: unknown };
 
@@ -154,7 +155,7 @@ export async function loadManual(sourceRoot: string, options: { chapterIndexName
     } catch (error) {
       throw new Error(`${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    let nodes = parseMarkdown(source, options.inlineTokens);
+    let nodes = applyTableDirectives(parseMarkdown(source, options.inlineTokens), relativePath);
     if (options.hooks?.length) nodes = applyRenderHooks(nodes, options.hooks, { relativePath });
     const h1 = nodes.filter((node) => node.type === "heading" && node.depth === 1);
     if (h1.length !== 1) throw new Error(`${relativePath} must contain exactly one first-level heading`);

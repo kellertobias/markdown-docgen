@@ -34,7 +34,7 @@ export interface ManualKeyPresentation {
   component: "key-sequence";
   keys: Array<{
     label: string;
-    icon?: "shift";
+    icon?: "shift" | "backspace";
     variant?: "regular" | "record" | "clear" | "preload" | "keyboard" | "shift";
   }>;
 }

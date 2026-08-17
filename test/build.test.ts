@@ -24,6 +24,10 @@ Unlisted secret: \${SECRET_VALUE}.
 
 Press [REC].
 
+Press [SHIFT] and [BACK].
+
+Command: \`#> FIXTURE 1 AT 100\`.
+
 \`\`\`mermaid
 flowchart LR
   Desk[Control] --> Output[DMX Output]
@@ -62,7 +66,11 @@ example
     await writeFile(path.join(root, "manual-hooks.mjs"), `export default {
   name: "test-keys",
   transform(node) {
-    if (node.type === "inlineToken") return { ...node, data: { ...node.data, presentation: { component: "key-sequence", keys: [{ label: node.value, variant: "record" }] } } };
+    if (node.type === "inlineCode" && node.value.startsWith("#>")) return { ...node, data: { ...node.data, presentation: { component: "command-line" } } };
+    if (node.type === "inlineToken") {
+      const icon = node.value === "SHIFT" ? "shift" : node.value === "BACK" ? "backspace" : undefined;
+      return { ...node, data: { ...node.data, presentation: { component: "key-sequence", keys: [{ label: node.value, icon, variant: node.value === "REC" ? "record" : "regular" }] } } };
+    }
   },
 };\n`);
     const configPath = path.join(root, "manual.json");
@@ -107,6 +115,9 @@ example
     expect(html).toContain('class="manual-section-divider"');
     expect(html).toContain('<h2 id="page-01-chapter-index-md-prepare">Prepare</h2>');
     expect(html).toContain('manual-key-record');
+    expect(html).toContain('class="manual-command-line"');
+    expect(html).toContain('M8 1.7 2.2 7.3');
+    expect(html).toContain('M6.2 3H14v10');
     expect(html).toContain("<svg");
     expect(html).not.toContain("flowchart LR");
     expect((await stat(config.output.pdf)).size).toBeGreaterThan(1_000);

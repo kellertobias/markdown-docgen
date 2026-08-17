@@ -1,9 +1,11 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { createRequire } from "node:module";
 import path from "node:path";
 import React from "react";
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import {
   Document,
+  Font,
   Image,
   Link,
   Page,
@@ -17,7 +19,13 @@ import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
 import { calloutAppearance } from "./callouts.js";
 
-const MAX_CONTENTS_ENTRIES_PER_PAGE = 64;
+const require = createRequire(import.meta.url);
+Font.register({
+  family: "ManualSymbols",
+  src: require.resolve("@fontsource/noto-sans-symbols-2/files/noto-sans-symbols-2-symbols-400-normal.woff"),
+});
+
+const MAX_CONTENTS_ENTRIES_PER_PAGE = 80;
 
 const base = StyleSheet.create({
   page: { fontFamily: "Helvetica", fontSize: 9.1, lineHeight: 1.38 },
@@ -45,8 +53,9 @@ const base = StyleSheet.create({
   image: { maxWidth: "100%", maxHeight: 390, objectFit: "contain" },
   caption: { marginTop: 3, fontSize: 7, color: "#64748b", textAlign: "center" },
   rule: { height: 1, marginVertical: 7 },
-  inlineToken: { fontFamily: "Helvetica-Bold", fontSize: 7.3, paddingHorizontal: 3, paddingVertical: 1 },
-  contentsItem: { flexDirection: "row", alignItems: "center", minHeight: 20, marginBottom: 1 },
+  inlineToken: { fontFamily: "Helvetica-Bold", fontSize: 7.3, paddingHorizontal: 4, paddingVertical: 1.5, borderWidth: 0.7, borderBottomWidth: 2.2, borderRadius: 3 },
+  commandLine: { fontFamily: "Courier-Bold", fontSize: 7.4, paddingHorizontal: 4, paddingVertical: 1.5, borderWidth: 0.7, borderBottomWidth: 2, borderRadius: 3, borderColor: "#aeb8c2", backgroundColor: "#4b5563", color: "#ffffff" },
+  contentsItem: { flexDirection: "row", alignItems: "center", minHeight: 16 },
   contentsLabel: { flexGrow: 1 },
   coverEyebrow: { fontFamily: "Helvetica-Bold", fontSize: 9, letterSpacing: 2.2, textTransform: "uppercase" },
   coverTitle: { maxWidth: 440, marginTop: 24, fontFamily: "Helvetica-Bold", fontSize: 32, lineHeight: 1.08 },
@@ -55,12 +64,12 @@ const base = StyleSheet.create({
   chapterHeading: { marginBottom: 14, padding: 14, borderTopWidth: 5 },
   sectionHeading: { marginTop: 13, marginBottom: 8, paddingLeft: 10, borderLeftWidth: 5, flexDirection: "row", alignItems: "center" },
   keySequence: { fontFamily: "Helvetica-Bold", fontSize: 7.2 },
-  keyRegular: { backgroundColor: "#20272e", color: "#f4f7f9" },
-  keyRecord: { backgroundColor: "#421116", color: "#ff8b93" },
-  keyClear: { backgroundColor: "#493b05", color: "#f0c52f" },
-  keyPreload: { backgroundColor: "#123d58", color: "#8bd3ff" },
-  keyKeyboard: { backgroundColor: "#e5e7eb", color: "#17202a", fontFamily: "Courier-Bold" },
-  keyShift: { backgroundColor: "#39434d", color: "#ffffff" },
+  keyRegular: { borderColor: "#59636d", borderBottomColor: "#11161b", backgroundColor: "#20272e", color: "#f4f7f9" },
+  keyRecord: { borderColor: "#ff6872", borderBottomColor: "#70181f", backgroundColor: "#421116", color: "#ff8b93" },
+  keyClear: { borderColor: "#d6a600", borderBottomColor: "#806000", backgroundColor: "#493b05", color: "#f0c52f" },
+  keyPreload: { borderColor: "#4ea8de", borderBottomColor: "#15577e", backgroundColor: "#123d58", color: "#8bd3ff" },
+  keyKeyboard: { borderColor: "#d8dee5", borderBottomColor: "#8b98a4", backgroundColor: "#ffffff", color: "#17202a", fontFamily: "Courier-Bold" },
+  keyShift: { borderColor: "#8d99a6", borderBottomColor: "#20272e", backgroundColor: "#39434d", color: "#ffffff" },
 });
 
 interface PdfContext {
@@ -102,7 +111,8 @@ function keyPresentation(node: ManualNode): React.ReactNode | undefined {
           : key.variant === "keyboard" ? base.keyKeyboard
             : key.variant === "shift" ? base.keyShift
               : base.keyRegular;
-    return <Text key={`${key.label}-${index}`}>{index ? <Text style={{ color: "#64748b" }}> + </Text> : null}<Text style={[base.inlineToken, style]}>{key.icon === "shift" ? "^ " : ""}{key.label}</Text></Text>;
+    const icon = key.icon === "shift" ? "⇧" : key.icon === "backspace" ? "⌫" : "";
+    return <Text key={`${key.label}-${index}`}>{index ? <Text style={{ color: "#64748b" }}> + </Text> : null}<Text style={[base.inlineToken, style]}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon} </Text> : null}{key.label}</Text></Text>;
   })}</Text>;
 }
 
@@ -115,7 +125,10 @@ function inlineNodes(nodes: ManualNode[] | undefined, context: PdfContext): Reac
       case "strong": return <Text key={key} style={{ fontFamily: "Helvetica-Bold" }}>{inlineNodes(node.children, context)}</Text>;
       case "emphasis": return <Text key={key} style={{ fontFamily: "Helvetica-Oblique" }}>{inlineNodes(node.children, context)}</Text>;
       case "delete": return <Text key={key} style={{ textDecoration: "line-through" }}>{inlineNodes(node.children, context)}</Text>;
-      case "inlineCode": return <Text key={key} style={[base.inlineCode, { color: context.config.theme.accent }]}>{node.value}</Text>;
+      case "inlineCode": {
+        const presentation = node.data?.presentation as { component?: string } | undefined;
+        return <Text key={key} style={presentation?.component === "command-line" ? base.commandLine : [base.inlineCode, { color: context.config.theme.accent }]}>{node.value}</Text>;
+      }
       case "inlineToken": return <React.Fragment key={key}>{keyPresentation(node) ?? <Text style={[base.inlineToken, { backgroundColor: context.config.theme.navigationBackground, color: "#ffb30f" }]}>{node.value}</Text>}</React.Fragment>;
       case "break": return "\n";
       case "link": {
@@ -235,7 +248,7 @@ function Contents({ chunks, config }: { chunks: TocEntry[][]; config: ResolvedCo
     >
       <View style={{ marginBottom: 14, paddingBottom: 8, borderBottomWidth: 2, borderColor: config.theme.accent }}>
         <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: config.theme.accent, letterSpacing: 1.8 }}>NAVIGATION</Text>
-        <Text style={[base.h1, { marginTop: 5, color: config.theme.navigationBackground }]}>{chunkIndex === 0 ? "Contents" : "Contents continued"}</Text>
+        <Text style={[base.h1, { marginTop: 5, color: config.theme.navigationBackground }]}>Contents</Text>
       </View>
       <View style={{ flexDirection: "row", flexGrow: 1, alignItems: "stretch" }}>
         {columns.map((column, columnIndex) => <View key={`column-${columnIndex}`} style={{ width: "50%", height: "100%", justifyContent: "space-between", paddingRight: columnIndex === 0 ? 11 : 0, paddingLeft: columnIndex === 1 ? 11 : 0 }}>

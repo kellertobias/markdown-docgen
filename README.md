@@ -148,9 +148,24 @@ export default {
 ```
 
 The built-in `key-sequence` presentation supports `regular`, `record`, `clear`, `preload`,
-`keyboard`, and `shift` variants. A key with `icon: "shift"` receives the Shift symbol. Table hooks
-may set `data.columnWidths` to relative weights; PDF-oriented hooks may additionally set
-`data.rowsPerPage` and `data.rowWeight` for unusually dense or verbose tables.
+`keyboard`, and `shift` variants. Keys accept the vector-backed `shift` and `backspace` icons.
+Use the `command-line` presentation on an `inlineCode` node to render a desk command-line readout.
+
+## Table directives
+
+Configure a particular table in its Markdown source rather than coupling document layout to a
+render hook. Put a directive immediately before the table:
+
+```md
+<!-- table: columns=12,15,18,55; rows-per-page=17; row-weight=1.5; continue-after-table -->
+| Desk key | Button | Computer keyboard | What it does |
+| --- | --- | --- | --- |
+```
+
+`columns` contains positive relative widths and must have exactly one value per table column.
+`rows-per-page` and `row-weight` tune unusually long PDF tables. `continue-after-table` permits
+following content to share the same generated PDF page. Unknown options, invalid numbers, column
+count mismatches, and directives that are not directly followed by a table fail the build.
 
 ## Mermaid diagrams
 
