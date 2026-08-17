@@ -16,7 +16,8 @@ function diagrams(nodes: ManualNode[]): ManualNode[] {
 export async function renderMermaidNodes(nodes: ManualNode[], options: ManualMermaidConfig): Promise<void> {
   const targets = diagrams(nodes);
   if (!targets.length) return;
-  const browser = await puppeteer.launch({ headless: true, args: options.browserArgs ?? [] });
+  const browserArgs = options.browserArgs ?? (process.env.CI ? ["--no-sandbox", "--disable-setuid-sandbox"] : []);
+  const browser = await puppeteer.launch({ headless: true, args: browserArgs });
   try {
     for (const [index, node] of targets.entries()) {
       const source = node.value ?? "";
