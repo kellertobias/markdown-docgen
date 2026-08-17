@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import { loadConfig } from "../src/config.js";
 import { renderHtml } from "../src/html.js";
 import { loadRenderHooks } from "../src/hooks.js";
@@ -149,5 +149,51 @@ example
       expect(width).toBeCloseTo(595.28, 1);
       expect(height).toBeCloseTo(841.89, 1);
     }
+  }, 30_000);
+  it("flows single-column pages across as many PDF pages as the content needs", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "markdown-manual-flow-"));
+    const source = path.join(root, "manual");
+    await mkdir(source, { recursive: true });
+    const section = (index: number): string => `## Section ${index}
+
+${`Body text for section ${index}. `.repeat(60)}
+
+1. First step of section ${index}.
+2. Second step of section ${index}.
+`;
+    await writeFile(path.join(source, "index.md"), `# Long Chapter
+
+${Array.from({ length: 12 }, (_, index) => section(index + 1)).join("\n")}`);
+    const configPath = path.join(root, "manual.json");
+    await writeFile(configPath, JSON.stringify({
+      title: "Flow Manual",
+      output: { htmlDir: "out/html", pdf: "out/manual.pdf" },
+      layout: { columns: 1 },
+      pdf: { header: "{chapter}", footer: "Flow Manual" },
+    }));
+    const config = await loadConfig(configPath);
+    const model = await loadManual(source, { maxHeadingDepth: config.layout.maxHeadingDepth });
+    await renderPdf(model, config);
+    const pdf = await PDFDocument.load(await readFile(config.output.pdf));
+
+    // One source page, so estimated pagination would have emitted a fixed number of chunks; flowing it
+    // means the renderer decides, and this much content does not fit on a single page.
+    expect(pdf.getPageCount()).toBeGreaterThan(4);
+
+    const pageNumbers = new Map(pdf.getPages().map((page, index) => [page.ref.toString(), index + 1]));
+    const names = pdf.catalog.lookupMaybe(PDFName.of("Names"), PDFDict)?.lookupMaybe(PDFName.of("Dests"), PDFDict);
+    const entries = names!.lookupMaybe(PDFName.of("Names"), PDFArray)!;
+    const destinations = new Map<string, number>();
+    for (let index = 0; index + 1 < entries.size(); index += 2) {
+      const page = pageNumbers.get(entries.lookup(index + 1, PDFArray).get(0).toString());
+      destinations.set(entries.get(index).toString().replace(/^\(|\)$/gu, ""), page!);
+    }
+    // Every contents entry resolves to a real page, and later sections land on later pages.
+    const headings = model.pages[0].headings.filter((heading) => heading.depth <= config.pdf.contentsDepth);
+    expect(headings.length).toBeGreaterThan(6);
+    const numbers = headings.map((heading) => destinations.get(heading.id));
+    expect(numbers.every((number) => typeof number === "number" && number > 1)).toBe(true);
+    expect(numbers.at(-1)!).toBeGreaterThan(numbers[0]!);
+    expect([...numbers].sort((left, right) => left! - right!)).toEqual(numbers);
   }, 30_000);
 });

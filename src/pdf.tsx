@@ -1,8 +1,8 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
 import path from "node:path";
 import React from "react";
-import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
+import { PDFArray, PDFDict, PDFDocument, PDFHexString, PDFName, PDFString, StandardFonts, rgb } from "pdf-lib";
 import {
   Document,
   Font,
@@ -12,8 +12,9 @@ import {
   StyleSheet,
   Text,
   View,
-  renderToFile,
+  renderToBuffer,
 } from "@react-pdf/renderer";
+import type { DocumentProps } from "@react-pdf/renderer";
 import type { ManualControlSequencePresentation, ManualKey, ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
 import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
@@ -86,12 +87,34 @@ interface PdfContext {
   config: ResolvedConfig;
   headingIndex: number;
   listDepth: number;
+  flow: boolean;
 }
 
 function pageFrame(config: ResolvedConfig): { width: number; height: number; minHeight: number; maxHeight: number } {
   const width = config.pdf.pageSize === "A4" ? 595.28 : 612;
   const height = config.pdf.pageSize === "A4" ? 841.89 : 792;
   return { width, height, minHeight: height, maxHeight: height };
+}
+
+// Flowing pages let React-PDF break the content itself, so their height must stay unconstrained.
+function flowFrame(config: ResolvedConfig): { width: number } {
+  return { width: config.pdf.pageSize === "A4" ? 595.28 : 612 };
+}
+
+// Single-column layouts are paginated by React-PDF. Two columns cannot flow, so they stay chunked.
+function flowsContent(config: ResolvedConfig): boolean {
+  return config.layout.columns === 1;
+}
+
+// Keeps a block from starting so late on a page that only its first line or row would be visible.
+function presenceAhead(node: ManualNode, context: PdfContext): number | undefined {
+  if (!context.flow) return undefined;
+  const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
+  if (node.type === "heading") return depth <= 2 ? 90 : depth === 3 ? 64 : 24;
+  if (node.type === "callout" || node.type === "blockquote") return 34;
+  if (node.type === "table") return 44;
+  if (node.type === "list") return 26;
+  return undefined;
 }
 
 function plain(node: ManualNode): string {
@@ -253,7 +276,7 @@ function renderListItem(node: ManualNode, context: PdfContext, key: string, inde
 function renderTable(node: ManualNode, context: PdfContext, key: string): React.ReactNode {
   const widths = tableColumnWidths(node);
   const continuation = Number(node.data?.tablePart ?? 0) > 0;
-  return <View key={key} style={[base.table, continuation ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>{(node.children ?? []).map((row, rowIndex) => <View key={`row-${rowIndex}`} style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]} wrap={false}>{(row.children ?? []).map((cell, cellIndex, cells) => <View key={`cell-${cellIndex}`} style={[base.cell, rowIndex === 0 ? base.headerCell : {}, { width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5, borderColor: "#cbd5df" }]}>{renderTableCell(cell, context, rowIndex === 0)}</View>)}</View>)}</View>;
+  return <View key={key} break={context.flow && continuation} minPresenceAhead={presenceAhead(node, context)} style={[base.table, continuation && !context.flow ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>{(node.children ?? []).map((row, rowIndex) => <View key={`row-${rowIndex}`} style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]} wrap={false}>{(row.children ?? []).map((cell, cellIndex, cells) => <View key={`cell-${cellIndex}`} style={[base.cell, rowIndex === 0 ? base.headerCell : {}, { width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5, borderColor: "#cbd5df" }]}>{renderTableCell(cell, context, rowIndex === 0)}</View>)}</View>)}</View>;
 }
 
 function renderTableCell(cell: ManualNode, context: PdfContext, header: boolean): React.ReactNode[] {
@@ -282,14 +305,16 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     case "paragraph": {
       const image = standaloneImage(node);
       if (image) return renderBlock(image, context, `${key}-image`);
-      if (hasPresentation(node.children)) return <View key={key} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
+      // Key sequences sit in a wrapped flex row, which React-PDF cannot split cleanly across a page
+      // boundary - the remainder ends up under the bottom margin - so such a paragraph stays whole.
+      if (hasPresentation(node.children)) return <View key={key} wrap={false} minPresenceAhead={context.flow ? 24 : undefined} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
       return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
     }
     case "heading": {
       const heading = context.page.headings[context.headingIndex++];
       const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
-      if (depth <= 2) return <View key={key} id={heading.id} wrap={false} style={[base.chapterHeading, { borderColor: context.config.theme.accent, backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: context.config.theme.accent, letterSpacing: 1.6 }}>CHAPTER</Text><Text style={[base.h1, { marginTop: 5, color: context.config.theme.navigationInk }]}>{inlineNodes(node.children, context)}</Text></View>;
-      if (depth === 3) return <View key={key} id={heading.id} wrap={false} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h3, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text><View style={{ flexGrow: 1, marginLeft: 10, borderBottomWidth: 5, borderColor: context.config.theme.accent }} /></View>;
+      if (depth <= 2) return <View key={key} id={heading.id} wrap={false} minPresenceAhead={presenceAhead(node, context)} style={[base.chapterHeading, { borderColor: context.config.theme.accent, backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: context.config.theme.accent, letterSpacing: 1.6 }}>CHAPTER</Text><Text style={[base.h1, { marginTop: 5, color: context.config.theme.navigationInk }]}>{inlineNodes(node.children, context)}</Text></View>;
+      if (depth === 3) return <View key={key} id={heading.id} wrap={false} minPresenceAhead={presenceAhead(node, context)} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h3, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text><View style={{ flexGrow: 1, marginLeft: 10, borderBottomWidth: 5, borderColor: context.config.theme.accent }} /></View>;
       if (depth === 4) return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h4, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text>;
       return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h5, { color: context.config.theme.navigationBackground }]}>{inlineNodes(node.children, context)}</Text>;
     }
@@ -299,15 +324,15 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
       return <View key={key} style={base.figure} wrap={false}><Image src={`data:image/png;base64,${png}`} style={base.image} />{node.alt ? <Text style={base.caption}>{node.alt}</Text> : null}</View>;
     }
     case "thematicBreak": return <View key={key} style={[base.rule, { backgroundColor: context.config.theme.muted }]} />;
-    case "blockquote": return <View key={key} style={[base.quote, { borderColor: context.config.theme.calloutInfo, backgroundColor: "#eef8f8" }]}>{blockNodes(node.children, context)}</View>;
+    case "blockquote": return <View key={key} minPresenceAhead={presenceAhead(node, context)} style={[base.quote, { borderColor: context.config.theme.calloutInfo, backgroundColor: "#eef8f8" }]}>{blockNodes(node.children, context)}</View>;
     case "callout": {
       const kind = node.calloutType ?? "note";
       const appearance = calloutAppearance(kind, context.config.theme);
-      return <View key={key} style={[base.callout, { borderColor: appearance.color, backgroundColor: appearance.background }]}><Text minPresenceAhead={18} style={[base.calloutTitle, { color: appearance.color }]}>{appearance.icon}  {node.calloutTitle}</Text>{blockNodes(node.children, context)}</View>;
+      return <View key={key} minPresenceAhead={presenceAhead(node, context)} style={[base.callout, { borderColor: appearance.color, backgroundColor: appearance.background }]}><Text minPresenceAhead={18} style={[base.calloutTitle, { color: appearance.color }]}>{appearance.icon}  {node.calloutTitle}</Text>{blockNodes(node.children, context)}</View>;
     }
     case "list": {
       const start = node.start ?? 1;
-      return <View key={key} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
+      return <View key={key} minPresenceAhead={presenceAhead(node, context)} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
     }
     case "table": return renderTable(node, context, key);
     case "image":
@@ -324,7 +349,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
   }
 }
 
-interface ContentChunk { page: SourcePage; nodes: ManualNode[]; headingIndex: number; divider?: boolean }
+interface ContentChunk { page: SourcePage; nodes: ManualNode[]; headingIndex: number; divider?: boolean; flow?: boolean }
 interface TocEntry { id: string; title: string; depth: number; pageNumber: number }
 
 function Contents({ chunks, config }: { chunks: TocEntry[][]; config: ResolvedConfig }): React.ReactElement {
@@ -381,8 +406,19 @@ function splitColumns(nodes: ManualNode[]): [ManualNode[], ManualNode[]] {
   return [nodes.slice(0, split), nodes.slice(split)];
 }
 
+// A flowing source page can produce any number of physical pages, so it marks its own start with a
+// named destination. Reading those back is what tells the running header where each chapter begins.
+function chunkAnchor(chunk: ContentChunk, index: number): string {
+  return `chunk-${index}-${chunk.page.id}`;
+}
+
+function PageAnchor({ id }: { id: string }): React.ReactElement {
+  return <View id={id} style={{ height: 0 }} />;
+}
+
 function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; model: ManualModel; config: ResolvedConfig; index: number }): React.ReactElement {
-  const context: PdfContext = { model, page: chunk.page, config, headingIndex: chunk.headingIndex, listDepth: 0 };
+  const context: PdfContext = { model, page: chunk.page, config, headingIndex: chunk.headingIndex, listDepth: 0, flow: Boolean(chunk.flow) };
+  const anchor = chunkAnchor(chunk, index);
   if (chunk.divider) {
     const headingNode = chunk.nodes.find((node) => node.type === "heading")!;
     const heading = chunk.page.headings[chunk.headingIndex];
@@ -390,16 +426,35 @@ function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; mod
     const before = chunk.nodes.slice(0, headingPosition).map(standaloneImage).filter((node): node is ManualNode => Boolean(node));
     const after = chunk.nodes.slice(headingPosition + 1).map(standaloneImage).filter((node): node is ManualNode => Boolean(node));
     const imageView = (node: ManualNode, position: string) => <Image key={position} src={localImage(context, node.url ?? "")} style={{ width: 150, height: 150, objectFit: "contain", marginVertical: 28 }} />;
-    return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.page.title} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]}><View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} /><View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>{before.map((node, imageIndex) => imageView(node, `before-${imageIndex}`))}<Text id={heading.id} style={{ maxWidth: 460, fontFamily: "Helvetica-Bold", fontSize: 34, lineHeight: 1.08, textAlign: "center" }}>{plain(headingNode)}</Text><View style={{ width: 90, height: 4, marginTop: 20, backgroundColor: config.theme.accent }} />{after.map((node, imageIndex) => imageView(node, `after-${imageIndex}`))}</View></Page>;
+    return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.page.title} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]}><PageAnchor id={anchor} /><View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} /><View style={{ flexGrow: 1, alignItems: "center", justifyContent: "center" }}>{before.map((node, imageIndex) => imageView(node, `before-${imageIndex}`))}<Text id={heading.id} style={{ maxWidth: 460, fontFamily: "Helvetica-Bold", fontSize: 34, lineHeight: 1.08, textAlign: "center" }}>{plain(headingNode)}</Text><View style={{ width: 90, height: 4, marginTop: 20, backgroundColor: config.theme.accent }} />{after.map((node, imageIndex) => imageView(node, `after-${imageIndex}`))}</View></Page>;
+  }
+  const padding = {
+    paddingTop: config.pdf.margins.top,
+    paddingRight: config.pdf.margins.right,
+    paddingBottom: config.pdf.margins.bottom,
+    paddingLeft: config.pdf.margins.left,
+    color: config.theme.ink,
+  };
+  if (chunk.flow) {
+    return <Page
+      key={`${chunk.page.id}-${index}`}
+      size={config.pdf.pageSize}
+      wrap
+      bookmark={chunk.headingIndex === 0 ? chunk.page.title : undefined}
+      style={[base.page, flowFrame(config), padding]}
+    >
+      <PageAnchor id={anchor} />
+      {blockNodes(chunk.nodes, context)}
+    </Page>;
   }
   const first = chunk.nodes[0];
   const spansColumns = config.layout.columns === 2 && first?.type === "heading" && Number(first.data?.effectiveDepth ?? first.depth ?? 1) <= 2;
   const bodyNodes = spansColumns ? chunk.nodes.slice(1) : chunk.nodes;
   const columns = config.layout.columns === 2 ? splitColumns(bodyNodes) : [bodyNodes];
-  return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.headingIndex === 0 ? chunk.page.title : undefined} style={[base.page, pageFrame(config), { paddingTop: config.pdf.margins.top, paddingRight: config.pdf.margins.right, paddingBottom: config.pdf.margins.bottom, paddingLeft: config.pdf.margins.left, color: config.theme.ink }]}>{spansColumns ? renderBlock(first, context, "spanning-heading") : null}<View style={[base.body, config.layout.columns === 2 ? { flexDirection: "row" } : {}]}>{columns.map((nodes, columnIndex) => <View key={`column-${columnIndex}`} style={config.layout.columns === 2 ? { width: "50%", paddingRight: columnIndex === 0 ? config.layout.columnGap / 2 : 0, paddingLeft: columnIndex === 1 ? config.layout.columnGap / 2 : 0 } : { width: "100%" }}>{blockNodes(nodes, context)}</View>)}</View></Page>;
+  return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.headingIndex === 0 ? chunk.page.title : undefined} style={[base.page, pageFrame(config), padding]}><PageAnchor id={anchor} />{spansColumns ? renderBlock(first, context, "spanning-heading") : null}<View style={[base.body, config.layout.columns === 2 ? { flexDirection: "row" } : {}]}>{columns.map((nodes, columnIndex) => <View key={`column-${columnIndex}`} style={config.layout.columns === 2 ? { width: "50%", paddingRight: columnIndex === 0 ? config.layout.columnGap / 2 : 0, paddingLeft: columnIndex === 1 ? config.layout.columnGap / 2 : 0 } : { width: "100%" }}>{blockNodes(nodes, context)}</View>)}</View></Page>;
 }
 
-function ManualDocument({ model, config, content, toc }: { model: ManualModel; config: ResolvedConfig; content: ContentChunk[]; toc: TocEntry[][] }): React.ReactElement {
+function ManualDocument({ model, config, content, toc }: { model: ManualModel; config: ResolvedConfig; content: ContentChunk[]; toc: TocEntry[][] }): React.ReactElement<DocumentProps> {
   return <Document title={config.title} author={config.author} subject={config.description ?? config.subtitle} creator="markdown-manual" producer="@tobisk/markdown-manuals" language={config.language ?? "en"} keywords={`manual, ${config.title}`}>
     <Page size={config.pdf.pageSize} wrap={false} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]} bookmark={config.title}>
       <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} />
@@ -452,6 +507,10 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
     sourceNodes = sourceNodes.filter((_, index) => !dividerIndexes.has(index));
     headingIndex = 1;
   }
+  if (flowsContent(config)) {
+    chunks.push({ page, nodes: sourceNodes.flatMap(splitLongTable), headingIndex, flow: true });
+    return chunks;
+  }
   const expanded = sourceNodes.flatMap(splitLongTable);
   const maximum = config.layout.columns === 2 ? 88 : 56;
   let start = 0;
@@ -484,9 +543,10 @@ function splitLongTable(node: ManualNode): ManualNode[] {
   const [header, ...rows] = node.children ?? [];
   const containsImages = rows.some((row) => (row.children ?? []).some((cell) => (cell.children ?? []).some((child) => child.type === "image" || child.type === "wikiImage")));
   const configuredRowsPerPart = Number(node.data?.rowsPerPage);
-  const rowsPerPart = Number.isFinite(configuredRowsPerPart) && configuredRowsPerPart > 0
-    ? Math.floor(configuredRowsPerPart)
-    : containsImages ? 4 : 11;
+  const configured = Number.isFinite(configuredRowsPerPart) && configuredRowsPerPart > 0;
+  // A table short enough to stay whole flows with the surrounding text. A longer one is still cut into
+  // parts, because each part repeats the header row that a plain page break would leave behind.
+  const rowsPerPart = configured ? Math.floor(configuredRowsPerPart) : containsImages ? 4 : 11;
   if (rows.length <= rowsPerPart) return [node];
   const parts = Math.ceil(rows.length / rowsPerPart);
   const tables: ManualNode[] = [];
@@ -500,18 +560,63 @@ export async function renderPdf(model: ManualModel, config: ResolvedConfig): Pro
   const filteredHeadings = model.pages.flatMap((page) => page.headings.filter((heading) => !heading.excludeFromContents && heading.depth <= config.pdf.contentsDepth));
   const tocPageCount = Math.max(1, Math.ceil(filteredHeadings.length / MAX_CONTENTS_ENTRIES_PER_PAGE));
   const contentsEntriesPerPage = Math.max(1, Math.ceil(filteredHeadings.length / tocPageCount));
-  const headingPages = new Map<string, number>();
+  const document = (headingPages: Map<string, number>): React.ReactElement<DocumentProps> => {
+    const tocEntries = filteredHeadings.map((heading) => ({ ...heading, pageNumber: headingPages.get(heading.id) ?? 0 }));
+    const toc: TocEntry[][] = [];
+    for (let index = 0; index < tocEntries.length; index += contentsEntriesPerPage) toc.push(tocEntries.slice(index, index + contentsEntriesPerPage));
+    if (!toc.length) toc.push([]);
+    return <ManualDocument model={model} config={config} content={content} toc={toc} />;
+  };
+
+  // Flowing pages are paginated by React-PDF, so contents page numbers can only be read back from a
+  // rendered document. The contents entries reserve a fixed-width number column, which keeps the
+  // second pass identical apart from those numbers - two passes therefore always converge.
+  let headingPages = new Map<string, number>();
+  for (let pass = 0; pass < 4; pass += 1) {
+    const bytes = await renderToBuffer(document(headingPages));
+    const rendered = await destinationPages(bytes);
+    if (samePagination(headingPages, rendered)) {
+      const headers = runningHeaders(content, rendered, tocPageCount, config);
+      await writeFile(config.output.pdf, await stampRunningFurniture(bytes, config, headers));
+      return;
+    }
+    headingPages = rendered;
+  }
+  throw new Error("PDF contents page numbers did not converge after four rendering passes");
+}
+
+// Maps every physical page to the header it should carry, using the destination each source page
+// dropped at its own start. Pages a chapter flowed onto simply keep that chapter's header.
+function runningHeaders(content: ContentChunk[], destinations: Map<string, number>, tocPageCount: number, config: ResolvedConfig): Map<number, string> {
+  const headers = new Map<number, string>();
+  for (let page = 2; page <= 1 + tocPageCount; page += 1) headers.set(page, "Contents");
   content.forEach((chunk, index) => {
-    const physicalPage = 2 + tocPageCount + index;
-    chunk.page.headings.slice(chunk.headingIndex, chunk.headingIndex + chunk.nodes.filter((node) => node.type === "heading").length).forEach((heading) => headingPages.set(heading.id, physicalPage));
+    const page = destinations.get(chunkAnchor(chunk, index));
+    if (page) headers.set(page, chunk.divider ? "" : chunk.page.chapterTitle ?? config.title);
   });
-  const tocEntries = filteredHeadings.map((heading) => ({ ...heading, pageNumber: headingPages.get(heading.id) ?? 0 }));
-  const toc: TocEntry[][] = [];
-  for (let index = 0; index < tocEntries.length; index += contentsEntriesPerPage) toc.push(tocEntries.slice(index, index + contentsEntriesPerPage));
-  if (!toc.length) toc.push([]);
-  const headers = ["", ...toc.map(() => "Contents"), ...content.map((chunk) => chunk.divider ? "" : chunk.page.chapterTitle)];
-  await renderToFile(<ManualDocument model={model} config={config} content={content} toc={toc} />, config.output.pdf);
-  await stampRunningFurniture(config, headers);
+  return headers;
+}
+
+async function stampRunningFurniture(bytes: Uint8Array, config: ResolvedConfig, headers: Map<number, string>): Promise<Uint8Array> {
+  const pdf = await PDFDocument.load(bytes);
+  const font = await pdf.embedFont(StandardFonts.Helvetica);
+  const pages = pdf.getPages();
+  const color = pdfColor(config.theme.muted);
+  const size = 7;
+  let chapter = "";
+
+  pages.forEach((page, index) => {
+    chapter = headers.get(index + 1) ?? chapter;
+    if (index === 0) return;
+    const { width, height } = page.getSize();
+    const header = config.pdf.header.replaceAll("{chapter}", chapter).replaceAll("{title}", config.title);
+    if (header) page.drawText(header, { x: config.pdf.margins.left, y: height - 27, size, font, color });
+    if (config.pdf.footer) page.drawText(config.pdf.footer, { x: config.pdf.margins.left, y: 20, size, font, color });
+    const counter = `${index + 1} / ${pages.length}`;
+    page.drawText(counter, { x: width - config.pdf.margins.right - font.widthOfTextAtSize(counter, size), y: 20, size, font, color });
+  });
+
+  return pdf.save();
 }
 
 function pdfColor(value: string): ReturnType<typeof rgb> {
@@ -524,23 +629,34 @@ function pdfColor(value: string): ReturnType<typeof rgb> {
   );
 }
 
-async function stampRunningFurniture(config: ResolvedConfig, headers: string[]): Promise<void> {
-  const document = await PDFDocument.load(await readFile(config.output.pdf));
-  const font = await document.embedFont(StandardFonts.Helvetica);
-  const pages = document.getPages();
-  const color = pdfColor(config.theme.muted);
-  const size = 7;
-  if (pages.length !== headers.length) throw new Error(`PDF pagination mismatch: rendered ${pages.length} pages for ${headers.length} explicit A4 pages`);
+function samePagination(current: Map<string, number>, next: Map<string, number>): boolean {
+  return current.size === next.size && [...next].every(([id, pageNumber]) => current.get(id) === pageNumber);
+}
 
-  pages.forEach((page, index) => {
-    if (index === 0) return;
-    const { width, height } = page.getSize();
-    const header = config.pdf.header.replaceAll("{chapter}", headers[index] ?? config.title).replaceAll("{title}", config.title);
-    if (header) page.drawText(header, { x: config.pdf.margins.left, y: height - 27, size, font, color });
-    if (config.pdf.footer) page.drawText(config.pdf.footer, { x: config.pdf.margins.left, y: 20, size, font, color });
-    const counter = `${index + 1} / ${pages.length}`;
-    page.drawText(counter, { x: width - config.pdf.margins.right - font.widthOfTextAtSize(counter, size), y: 20, size, font, color });
-  });
+// React-PDF turns every `id` into a PDF named destination, which is the only reliable record of where
+// a heading actually landed once the renderer, rather than an estimate, decides the page breaks.
+async function destinationPages(bytes: Uint8Array): Promise<Map<string, number>> {
+  const pdf = await PDFDocument.load(bytes);
+  const pageNumbers = new Map<string, number>();
+  pdf.getPages().forEach((page, index) => pageNumbers.set(page.ref.toString(), index + 1));
+  const destinations = new Map<string, number>();
+  const names = pdf.catalog.lookupMaybe(PDFName.of("Names"), PDFDict)?.lookupMaybe(PDFName.of("Dests"), PDFDict);
+  for (const node of nameTreeNodes(pdf, names)) {
+    for (let index = 0; index + 1 < node.size(); index += 2) {
+      const name = node.get(index);
+      const key = name instanceof PDFHexString ? name.decodeText() : name instanceof PDFString ? name.asString() : undefined;
+      const page = pageNumbers.get(node.lookup(index + 1, PDFArray).get(0).toString());
+      if (key && page) destinations.set(key, page);
+    }
+  }
+  return destinations;
+}
 
-  await writeFile(config.output.pdf, await document.save());
+function nameTreeNodes(pdf: PDFDocument, node: PDFDict | undefined): PDFArray[] {
+  if (!node) return [];
+  const names = node.lookupMaybe(PDFName.of("Names"), PDFArray);
+  if (names) return [names];
+  const kids = node.lookupMaybe(PDFName.of("Kids"), PDFArray);
+  if (!kids) return [];
+  return Array.from({ length: kids.size() }, (_, index) => kids.lookup(index, PDFDict)).flatMap((kid) => nameTreeNodes(pdf, kid));
 }
