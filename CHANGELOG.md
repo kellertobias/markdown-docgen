@@ -1,3 +1,7 @@
+## <small>1.0.1 (2026-08-17)</small>
+
+* fix: restrict environment placeholder expansion ([6e0d350](https://git.tokenet.de/opensource/md-docs-gen/commit/6e0d350))
+
 ## 1.0.0 (2026-08-17)
 
 * ci: run verification on mirrored main ([2d16669](https://git.tokenet.de/opensource/md-docs-gen/commit/2d16669))
