@@ -75,6 +75,7 @@ const base = StyleSheet.create({
   richLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
   keyBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 3.5, paddingVertical: 1.8, borderWidth: 0.7, borderBottomWidth: 1.8, borderRadius: 4 },
   keyGroup: { flexDirection: "row", alignItems: "center" },
+  shiftChord: { flexDirection: "row", alignItems: "flex-end", paddingTop: 1 },
   commandBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 3.5, paddingVertical: 1.8, borderWidth: 0.7, borderRadius: 4, borderColor: "#aeb8c2", backgroundColor: "#4b5563" },
   controlBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 0.7, marginVertical: 0.35, paddingHorizontal: 2.5, paddingVertical: 1.5, borderWidth: 0.7, borderRadius: 4.5, borderColor: "#334554", backgroundColor: "#071621" },
 });
@@ -139,11 +140,21 @@ function keyStyle(key: ManualKey): object {
 }
 
 function keyBoxes(keys: ManualKey[], prefix: string): React.ReactNode {
-  return <View style={base.keyGroup}>{keys.map((key, index) => {
+  const box = (key: ManualKey, index: number, extraStyle?: any): React.ReactNode => {
     const icon = key.icon === "shift" ? "⇧" : key.icon === "backspace" ? "⌫" : "";
     const style = keyStyle(key) as { color?: string };
-    return <React.Fragment key={`${prefix}-${key.label}-${index}`}>{index ? <Text style={{ marginHorizontal: 1.4, color: "#64748b", fontSize: 6.8 }}>+</Text> : null}<View style={[base.keyBox, style]}><Text style={{ fontFamily: key.variant === "keyboard" ? "Courier-Bold" : "Helvetica-Bold", fontSize: 7.1, color: style.color ?? "#f4f7f9" }}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon}</Text> : null}{icon && key.label ? " " : null}{key.label}</Text></View></React.Fragment>;
-  })}</View>;
+    return <View key={`${prefix}-${key.label}-${index}`} style={[base.keyBox, style, extraStyle]}><Text style={{ fontFamily: key.variant === "keyboard" ? "Courier-Bold" : "Helvetica-Bold", fontSize: 7.1, color: style.color ?? "#f4f7f9" }}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon}</Text> : null}{icon && key.label ? " " : null}{key.label}</Text></View>;
+  };
+  const groups: React.ReactNode[] = [];
+  for (let index = 0; index < keys.length; index += 1) {
+    const key = keys[index];
+    if (groups.length) groups.push(<Text key={`${prefix}-plus-${index}`} style={{ marginHorizontal: 1.4, color: "#64748b", fontSize: 6.8 }}>+</Text>);
+    if (key.variant === "shift" && keys[index + 1]) {
+      groups.push(<View key={`${prefix}-shift-chord-${index}`} style={base.shiftChord}>{box(key, index, { top: 1.2 })}{box(keys[index + 1], index + 1, { marginLeft: -1.2, top: -0.8 })}</View>);
+      index += 1;
+    } else groups.push(box(key, index));
+  }
+  return <View style={base.keyGroup}>{groups}</View>;
 }
 
 function hasPresentation(nodes: ManualNode[] | undefined): boolean {
