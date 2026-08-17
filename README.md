@@ -184,6 +184,17 @@ shared model; static HTML and PDF intentionally render their content expanded. A
 by unique page title, basename, or root-relative Markdown path. `![[image.png|Caption]]` embeds a
 local image.
 
+The renderer supports Obsidian's standard callout types and aliases: `note`; `abstract`, `summary`,
+and `tldr`; `info`; `todo`; `tip`, `hint`, and `important`; `success`, `check`, and `done`;
+`question`, `help`, and `faq`; `warning`, `caution`, and `attention`; `failure`, `fail`, and
+`missing`; `danger` and `error`; `bug`; `example`; and `quote` and `cite`. Each family has its own
+semantic accent and tinted background in both HTML and PDF. Unknown callout types remain visible
+and use the note appearance. `theme.callouts` can override an individual type or family color.
+
+CommonMark line-break rules are preserved across both outputs. A single source newline inside a
+paragraph becomes a space, two trailing spaces before a newline create a visible hard break, and a
+blank line starts a new paragraph.
+
 ## Development
 
 ```sh

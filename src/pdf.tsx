@@ -15,6 +15,9 @@ import {
 import type { ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
 import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
+import { calloutAppearance } from "./callouts.js";
+
+const MAX_CONTENTS_ENTRIES_PER_PAGE = 64;
 
 const base = StyleSheet.create({
   page: { fontFamily: "Helvetica", fontSize: 9.1, lineHeight: 1.38 },
@@ -43,7 +46,7 @@ const base = StyleSheet.create({
   caption: { marginTop: 3, fontSize: 7, color: "#64748b", textAlign: "center" },
   rule: { height: 1, marginVertical: 7 },
   inlineToken: { fontFamily: "Helvetica-Bold", fontSize: 7.3, paddingHorizontal: 3, paddingVertical: 1 },
-  contentsItem: { flexDirection: "row", alignItems: "center", minHeight: 16, marginBottom: 2 },
+  contentsItem: { flexDirection: "row", alignItems: "center", minHeight: 20, marginBottom: 1 },
   contentsLabel: { flexGrow: 1 },
   coverEyebrow: { fontFamily: "Helvetica-Bold", fontSize: 9, letterSpacing: 2.2, textTransform: "uppercase" },
   coverTitle: { maxWidth: 440, marginTop: 24, fontFamily: "Helvetica-Bold", fontSize: 32, lineHeight: 1.08 },
@@ -107,7 +110,7 @@ function inlineNodes(nodes: ManualNode[] | undefined, context: PdfContext): Reac
   return (nodes ?? []).map((node, index) => {
     const key = `${node.type}-${index}`;
     switch (node.type) {
-      case "text": return node.value ?? "";
+      case "text": return (node.value ?? "").replace(/\r?\n/gu, " ");
       case "html": return /^<br\s*\/?>$/iu.test(node.value ?? "") ? "\n" : node.value ?? "";
       case "strong": return <Text key={key} style={{ fontFamily: "Helvetica-Bold" }}>{inlineNodes(node.children, context)}</Text>;
       case "emphasis": return <Text key={key} style={{ fontFamily: "Helvetica-Oblique" }}>{inlineNodes(node.children, context)}</Text>;
@@ -172,7 +175,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
       const heading = context.page.headings[context.headingIndex++];
       const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
       if (depth <= 2) return <View key={key} id={heading.id} wrap={false} style={[base.chapterHeading, { borderColor: context.config.theme.accent, backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: context.config.theme.accent, letterSpacing: 1.6 }}>CHAPTER</Text><Text style={[base.h1, { marginTop: 5, color: context.config.theme.navigationInk }]}>{inlineNodes(node.children, context)}</Text></View>;
-      if (depth === 3) return <View key={key} id={heading.id} wrap={false} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h3, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text><View style={{ flexGrow: 1, marginLeft: 10, borderBottomWidth: 2, borderColor: context.config.theme.accent }} /></View>;
+      if (depth === 3) return <View key={key} id={heading.id} wrap={false} style={[base.sectionHeading, { borderColor: context.config.theme.accent }]}><Text style={[base.h3, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text><View style={{ flexGrow: 1, marginLeft: 10, borderBottomWidth: 5, borderColor: context.config.theme.accent }} /></View>;
       if (depth === 4) return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h4, { color: context.config.theme.accent }]}>{inlineNodes(node.children, context)}</Text>;
       return <Text key={key} id={heading.id} minPresenceAhead={24} style={[base.h5, { color: context.config.theme.navigationBackground }]}>{inlineNodes(node.children, context)}</Text>;
     }
@@ -185,8 +188,8 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     case "blockquote": return <View key={key} style={[base.quote, { borderColor: context.config.theme.calloutInfo, backgroundColor: "#eef8f8" }]}>{blockNodes(node.children, context)}</View>;
     case "callout": {
       const kind = node.calloutType ?? "note";
-      const color = context.config.theme.callouts[kind] ?? (kind === "danger" ? context.config.theme.calloutDanger : context.config.theme.calloutInfo);
-      return <View key={key} style={[base.callout, { borderColor: color, backgroundColor: kind === "danger" ? "#fff0ee" : "#eef8f8" }]}><Text minPresenceAhead={18} style={[base.calloutTitle, { color }]}>{kind === "danger" ? "!  " : "i  "}{node.calloutTitle}</Text>{blockNodes(node.children, context)}</View>;
+      const appearance = calloutAppearance(kind, context.config.theme);
+      return <View key={key} style={[base.callout, { borderColor: appearance.color, backgroundColor: appearance.background }]}><Text minPresenceAhead={18} style={[base.calloutTitle, { color: appearance.color }]}>{appearance.icon}  {node.calloutTitle}</Text>{blockNodes(node.children, context)}</View>;
     }
     case "list": {
       const start = node.start ?? 1;
@@ -211,11 +214,46 @@ interface TocEntry { id: string; title: string; depth: number; pageNumber: numbe
 
 function Contents({ chunks, config }: { chunks: TocEntry[][]; config: ResolvedConfig }): React.ReactElement {
   return <>{chunks.map((chunk, chunkIndex) => {
-    const midpoint = Math.ceil(chunk.length / 2);
-    const columns = [chunk.slice(0, midpoint), chunk.slice(midpoint)];
-    return <Page key={`contents-${chunkIndex}`} size={config.pdf.pageSize} wrap={false} style={[base.page, pageFrame(config), { paddingTop: config.pdf.margins.top, paddingRight: config.pdf.margins.right, paddingBottom: config.pdf.margins.bottom, paddingLeft: config.pdf.margins.left, color: config.theme.ink }]} bookmark={chunkIndex === 0 ? "Contents" : undefined}>
-      <View style={{ marginBottom: 18, paddingBottom: 10, borderBottomWidth: 2, borderColor: config.theme.accent }}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: config.theme.accent, letterSpacing: 1.8 }}>NAVIGATION</Text><Text style={[base.h1, { marginTop: 5, color: config.theme.navigationBackground }]}>{chunkIndex === 0 ? "Contents" : "Contents continued"}</Text></View>
-      <View style={{ flexDirection: "row" }}>{columns.map((column, columnIndex) => <View key={`column-${columnIndex}`} style={{ width: "50%", paddingRight: columnIndex === 0 ? 11 : 0, paddingLeft: columnIndex === 1 ? 11 : 0 }}>{column.map((entry) => <View key={entry.id} style={[base.contentsItem, entry.depth === 1 ? { marginTop: 6, marginBottom: 4, padding: 6, backgroundColor: config.theme.navigationBackground } : { paddingLeft: Math.max(0, entry.depth - 2) * 8 }]}><Link src={`#${entry.id}`} style={[base.contentsLabel, { color: entry.depth === 1 ? config.theme.navigationInk : entry.depth === 2 ? config.theme.accent : config.theme.ink, fontFamily: entry.depth <= 2 ? "Helvetica-Bold" : "Helvetica", fontSize: entry.depth === 1 ? 9 : entry.depth === 2 ? 8.2 : 7.5 }]}>{entry.title}</Link><View style={{ flexGrow: 1, marginHorizontal: 5, borderBottomWidth: entry.depth === 1 ? 0 : 0.5, borderColor: "#cbd5df" }} /><Text style={{ width: 20, textAlign: "right", color: entry.depth === 1 ? config.theme.navigationInk : config.theme.muted, fontSize: 7 }}>{entry.pageNumber}</Text></View>)}</View>)}</View>
+    const columnSize = Math.ceil(chunk.length / 2);
+    const columns = [chunk.slice(0, columnSize), chunk.slice(columnSize)];
+    return <Page
+      key={`contents-${chunkIndex}`}
+      size={config.pdf.pageSize}
+      wrap={false}
+      style={[base.page, pageFrame(config), {
+        paddingTop: config.pdf.margins.top,
+        paddingRight: config.pdf.margins.right,
+        paddingBottom: config.pdf.margins.bottom,
+        paddingLeft: config.pdf.margins.left,
+        color: config.theme.ink,
+      }]}
+      bookmark={chunkIndex === 0 ? "Contents" : undefined}
+    >
+      <View style={{ marginBottom: 14, paddingBottom: 8, borderBottomWidth: 2, borderColor: config.theme.accent }}>
+        <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: config.theme.accent, letterSpacing: 1.8 }}>NAVIGATION</Text>
+        <Text style={[base.h1, { marginTop: 5, color: config.theme.navigationBackground }]}>{chunkIndex === 0 ? "Contents" : "Contents continued"}</Text>
+      </View>
+      <View style={{ flexDirection: "row" }}>
+        {columns.map((column, columnIndex) => <View key={`column-${columnIndex}`} style={{ width: "50%", paddingRight: columnIndex === 0 ? 11 : 0, paddingLeft: columnIndex === 1 ? 11 : 0 }}>
+          {column.map((entry) => <View
+            key={entry.id}
+            style={[
+              base.contentsItem,
+              entry.depth === 1
+                ? { marginTop: 2, marginBottom: 1, padding: 4, backgroundColor: config.theme.navigationBackground }
+                : { paddingLeft: Math.max(0, entry.depth - 2) * 8 },
+            ]}
+          >
+            <Link src={`#${entry.id}`} style={[base.contentsLabel, {
+              color: entry.depth === 1 ? config.theme.navigationInk : entry.depth === 2 ? config.theme.accent : config.theme.ink,
+              fontFamily: entry.depth <= 2 ? "Helvetica-Bold" : "Helvetica",
+              fontSize: entry.depth === 1 ? 8.5 : entry.depth === 2 ? 7.8 : 7.2,
+            }]}>{entry.title}</Link>
+            <View style={{ flexGrow: 1, marginHorizontal: 5, borderBottomWidth: entry.depth === 1 ? 0 : 0.5, borderColor: "#cbd5df" }} />
+            <Text style={{ width: 20, textAlign: "right", color: entry.depth === 1 ? config.theme.navigationInk : config.theme.muted, fontSize: 6.8 }}>{entry.pageNumber}</Text>
+          </View>)}
+        </View>)}
+      </View>
     </Page>;
   })}</>;
 }
@@ -333,7 +371,8 @@ export async function renderPdf(model: ManualModel, config: ResolvedConfig): Pro
   await mkdir(path.dirname(config.output.pdf), { recursive: true });
   const content = model.pages.flatMap((page) => pageChunks(page, config));
   const filteredHeadings = model.pages.flatMap((page) => page.headings.filter((heading) => heading.depth <= config.pdf.contentsDepth));
-  const tocPageCount = Math.max(1, Math.ceil(filteredHeadings.length / 36));
+  const tocPageCount = Math.max(1, Math.ceil(filteredHeadings.length / MAX_CONTENTS_ENTRIES_PER_PAGE));
+  const contentsEntriesPerPage = Math.max(1, Math.ceil(filteredHeadings.length / tocPageCount));
   const headingPages = new Map<string, number>();
   content.forEach((chunk, index) => {
     const physicalPage = 2 + tocPageCount + index;
@@ -341,7 +380,7 @@ export async function renderPdf(model: ManualModel, config: ResolvedConfig): Pro
   });
   const tocEntries = filteredHeadings.map((heading) => ({ ...heading, pageNumber: headingPages.get(heading.id) ?? 0 }));
   const toc: TocEntry[][] = [];
-  for (let index = 0; index < tocEntries.length; index += 36) toc.push(tocEntries.slice(index, index + 36));
+  for (let index = 0; index < tocEntries.length; index += contentsEntriesPerPage) toc.push(tocEntries.slice(index, index + contentsEntriesPerPage));
   if (!toc.length) toc.push([]);
   const headers = ["", ...toc.map(() => "Contents"), ...content.map((chunk) => chunk.divider ? "" : chunk.page.chapterTitle)];
   await renderToFile(<ManualDocument model={model} config={config} content={content} toc={toc} />, config.output.pdf);

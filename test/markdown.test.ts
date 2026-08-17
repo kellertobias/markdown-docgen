@@ -4,6 +4,7 @@ import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadManual, parseMarkdown } from "../src/markdown.js";
 import { expandEnvironment, parseAllowedEnvironmentVariables } from "../src/environment.js";
+import { calloutAppearance, OBSIDIAN_CALLOUT_TYPES } from "../src/callouts.js";
 
 describe("Obsidian Markdown extensions", () => {
   it("expands only explicitly allowed environment placeholders", () => {
@@ -31,6 +32,15 @@ describe("Obsidian Markdown extensions", () => {
     });
     expect(JSON.stringify(nodes)).toContain('"type":"wikiLink"');
     expect(JSON.stringify(nodes)).toContain('"type":"wikiImage"');
+  });
+
+  it("supports every standard Obsidian callout type and semantic alias", () => {
+    const source = OBSIDIAN_CALLOUT_TYPES.map((kind) => `> [!${kind}] ${kind}\n> Body`).join("\n\n");
+    const nodes = parseMarkdown(source);
+    expect(nodes.map((node) => node.calloutType)).toEqual([...OBSIDIAN_CALLOUT_TYPES]);
+    expect(calloutAppearance("caution")).toMatchObject({ canonical: "warning", background: "#fff3c4" });
+    expect(calloutAppearance("error")).toMatchObject({ canonical: "danger", background: "#ffe6e3" });
+    expect(calloutAppearance("done")).toMatchObject({ canonical: "success", background: "#e9f7ed" });
   });
 
   it("turns configured text and command-code patterns into inline tokens", () => {

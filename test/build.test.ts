@@ -31,6 +31,15 @@ flowchart LR
 
 > [!danger] Graphic missing
 > Add the drawing.
+
+> [!warning] Check this
+> A yellow warning.
+
+Soft source
+line.
+
+Hard source${"  "}
+line.
 `);
     await writeFile(path.join(source, "01-Chapter", "index.md"), `# Operations
 
@@ -81,8 +90,12 @@ example
     expect(await readFile(config.output.htmlArchive!)).toEqual(firstZip);
     await renderPdf(model, config);
     const html = await readFile(path.join(config.output.htmlDir, "index.html"), "utf8");
-    expect(html).toContain('class="callout callout-danger"');
+    expect(html).toContain('class="callout callout-danger callout-type-danger"');
+    expect(html).toContain('class="callout callout-warning callout-type-warning"');
+    expect(html).toContain("--callout-background:#fff3c4");
     expect(html).not.toContain("[!danger]");
+    expect(html).toContain("Soft source line.");
+    expect(html).toContain("Hard source<br>line.");
     expect(html).toContain('href="#page-01-chapter-index-md"');
     expect(html).toContain("Software version: 9.8.7");
     expect(html).toContain("Unlisted secret: ${SECRET_VALUE}");

@@ -4,6 +4,7 @@ import { zipSync, type Zippable } from "fflate";
 import type { ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
 import { resolvePageLink, slug } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
+import { calloutAppearance } from "./callouts.js";
 
 function escape(value: string): string {
   return value.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;");
@@ -24,6 +25,7 @@ interface RenderContext {
   page: SourcePage;
   headingIndex: number;
   assets: Map<string, string>;
+  config: ResolvedConfig;
 }
 
 function renderChildren(node: ManualNode, context: RenderContext): string {
@@ -45,7 +47,7 @@ function standaloneImage(node: ManualNode): boolean {
 
 function renderNode(node: ManualNode, context: RenderContext): string {
   switch (node.type) {
-    case "text": return escape(node.value ?? "");
+    case "text": return escape((node.value ?? "").replace(/\r?\n/gu, " "));
     case "paragraph": return `<p>${renderChildren(node, context)}</p>`;
     case "strong": return `<strong>${renderChildren(node, context)}</strong>`;
     case "emphasis": return `<em>${renderChildren(node, context)}</em>`;
@@ -86,7 +88,8 @@ function renderNode(node: ManualNode, context: RenderContext): string {
     case "blockquote": return `<blockquote>${renderChildren(node, context)}</blockquote>`;
     case "callout": {
       const kind = node.calloutType ?? "note";
-      return `<aside class="callout callout-${escape(kind)}" data-callout="${escape(kind)}"><div class="callout-title"><span aria-hidden="true">${kind === "danger" ? "⚠" : "ⓘ"}</span>${escape(node.calloutTitle ?? kind)}</div><div class="callout-body">${renderChildren(node, context)}</div></aside>`;
+      const appearance = calloutAppearance(kind, context.config.theme);
+      return `<aside class="callout callout-${escape(appearance.canonical)} callout-type-${escape(kind)}" data-callout="${escape(kind)}" style="--callout-color:${escape(appearance.color)};--callout-background:${escape(appearance.background)}"><div class="callout-title"><span aria-hidden="true">${escape(appearance.icon)}</span>${escape(node.calloutTitle ?? kind)}</div><div class="callout-body">${renderChildren(node, context)}</div></aside>`;
     }
     case "list": {
       const tag = node.ordered ? "ol" : "ul";
@@ -104,8 +107,8 @@ function renderNode(node: ManualNode, context: RenderContext): string {
   }
 }
 
-function renderPage(model: ManualModel, page: SourcePage, assets: Map<string, string>, columns: 1 | 2): string {
-  const context: RenderContext = { model, page, headingIndex: 0, assets };
+function renderPage(model: ManualModel, page: SourcePage, assets: Map<string, string>, config: ResolvedConfig): string {
+  const context: RenderContext = { model, page, headingIndex: 0, assets, config };
   let nodes = page.nodes;
   let divider = "";
   const isTopLevelIndex = page.isChapter && page.relativePath.split("/").length === 2;
@@ -118,7 +121,7 @@ function renderPage(model: ManualModel, page: SourcePage, assets: Map<string, st
     nodes = nodes.filter((_, index) => !dividerIndexes.has(index));
   }
   const html = nodes.map((node) => renderNode(node, context)).join("\n");
-  return `<article class="manual-page${isTopLevelIndex ? " top-level-page" : ""}" data-page="${page.id}" aria-labelledby="${page.id}">${divider}<div class="manual-page-content columns-${columns}">${html}</div></article>`;
+  return `<article class="manual-page${isTopLevelIndex ? " top-level-page" : ""}" data-page="${page.id}" aria-labelledby="${page.id}">${divider}<div class="manual-page-content columns-${config.layout.columns}">${html}</div></article>`;
 }
 
 function navigation(model: ManualModel): string {
@@ -127,7 +130,7 @@ function navigation(model: ManualModel): string {
 
 function css(config: ResolvedConfig): string {
   const t = config.theme;
-  const callouts = Object.entries(t.callouts).map(([kind, color]) => `.callout-${kind}{--callout-color:${color}}`).join("");
+  const callouts = `.manual-page h3:after{height:.32rem}.callout{background:var(--callout-background,#eef8f8)}${Object.entries(t.callouts).map(([kind, color]) => `.callout-type-${kind}{--callout-color:${color}}`).join("")}`;
   return `:root{color-scheme:light;--accent:${t.accent};--accent-contrast:${t.accentContrast};--paper:${t.background};--danger:${t.calloutDanger};--info:${t.calloutInfo};--ink:${t.ink};--muted:${t.muted};--nav:${t.navigationBackground};--nav-ink:${t.navigationInk};--code:${t.codeBackground};font-family:Inter,ui-sans-serif,system-ui,sans-serif}*{box-sizing:border-box}html{scroll-behavior:smooth}body{margin:0;background:var(--paper);color:var(--ink);line-height:1.5}.nav-toggle{display:none}.sidebar{position:fixed;inset:0 auto 0 0;width:20rem;padding:1.2rem;overflow:auto;background:var(--nav);color:var(--nav-ink)}.brand{margin-bottom:1rem}.brand img{display:block;width:3rem;height:3rem;object-fit:contain}.brand strong{font-size:1.1rem}.search{position:sticky;top:0;padding:.6rem 0;background:var(--nav)}.search input{width:100%;padding:.7rem;border:1px solid #ffffff44;border-radius:.4rem;background:#ffffff12;color:inherit}.nav-link{display:block;padding:.38rem .55rem;border-left:3px solid transparent;color:inherit;text-decoration:none}.nav-link.chapter{margin-top:.5rem;color:${t.accent};font-weight:800}.nav-link.active{border-color:${t.accent};background:#ffffff12}.manual{margin-left:20rem}.hero{padding:5rem max(6vw,2rem);background:var(--nav);color:var(--nav-ink)}.hero img{width:5rem;height:5rem;object-fit:contain}.hero h1{font-size:clamp(2.7rem,7vw,5.3rem);line-height:1;margin:.8rem 0}.hero p{color:${t.accent}}.manual-page{max-width:70rem;margin:2.5rem auto;padding:3rem clamp(1.2rem,5vw,4.5rem);background:#fff;box-shadow:0 15px 45px #07162118}.top-level-page{padding-top:0}.manual-section-divider{display:flex;min-height:72vh;margin:0 clamp(-4.5rem,-5vw,-1.2rem) 3rem;padding:4rem;flex-direction:column;align-items:center;justify-content:center;background:var(--nav);color:var(--nav-ink);text-align:center}.manual-section-divider h1{margin:0;padding:0;background:none;font-size:clamp(2.8rem,7vw,5rem);letter-spacing:-.03em}.manual-section-divider h1:after{content:'';display:block;position:static;width:5rem;height:.28rem;margin:1.4rem auto 0;background:var(--accent)}.manual-section-divider figure{margin:1.8rem 0}.manual-section-divider img{width:10rem;height:10rem;object-fit:contain}.manual-section-divider figcaption{display:none}.manual-page-content.columns-2{column-count:2;column-gap:${config.layout.columnGap}px}.manual-page-content.columns-2>h2,.manual-page-content.columns-2>h3,.manual-page-content.columns-2>.table-scroll,.manual-page-content.columns-2>figure,.manual-page-content.columns-2>pre,.manual-page-content.columns-2>.callout{column-span:all}.manual-page-content p,.manual-page-content li{text-align:${config.layout.justifyText ? "justify" : "left"};hyphens:auto}.manual-page h2{position:relative;margin:2rem 0;padding:1.35rem 1.5rem 1.15rem;border-top:.32rem solid var(--accent);background:var(--nav);color:var(--nav-ink);letter-spacing:-.02em}.manual-page h2:before{content:'CHAPTER';display:block;margin-bottom:.35rem;color:var(--accent);font-size:.48em;letter-spacing:.18em}.manual-page h3{display:flex;align-items:center;gap:.8rem;margin:2rem 0 .8rem;padding:.25rem 0 .25rem .8rem;border-left:.32rem solid var(--accent);color:var(--accent)}.manual-page h3:after{content:'';height:.14rem;flex:1;background:var(--accent)}.manual-page h4{margin:1.4rem 0 .55rem;color:var(--accent)}.manual-page h5{margin:1.1rem 0 .45rem;color:var(--nav);font-size:1rem}a{color:var(--accent)}pre{overflow:auto;padding:1rem;border-radius:.4rem;background:var(--code);color:#e5f8f5}code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.inline-token{display:inline-block;margin:0 .1rem;padding:.05rem .35rem;border:1px solid #8896a3;border-radius:.3rem;background:#17202a;color:#ffb30f;font-size:.85em;font-weight:800}.manual-key-sequence{display:inline-flex;align-items:center;gap:.22rem;white-space:nowrap}.manual-key{display:inline-flex;min-height:1.65rem;align-items:center;gap:.28rem;padding:.16rem .5rem;border:1px solid #3a4652;border-bottom-width:3px;border-radius:.42rem;background:linear-gradient(#252c33,#171c22);color:#f4f7f9;box-shadow:0 1px 2px #0006,inset 0 1px #ffffff14;font:800 .78em/1.1 Inter,ui-sans-serif,sans-serif}.manual-key-icon{width:.8rem;height:.8rem;fill:currentColor}.manual-key-plus{color:var(--muted);font-size:.72em;font-weight:800}.manual-key-record{border-color:#ff6872;border-bottom-color:#70181f;background:linear-gradient(#421116,#21090c);color:#ff8b93}.manual-key-clear{border-color:#d6a600;border-bottom-color:#806000;background:linear-gradient(#493b05,#261d08);color:#f0c52f}.manual-key-preload{border-color:#4ea8de;border-bottom-color:#15577e;background:linear-gradient(#123d58,#09283d);color:#8bd3ff}.manual-key-shift{border-color:#8d99a6;background:linear-gradient(#39434d,#20272e);color:#fff}.manual-key-keyboard{border-color:#cbd5e1;border-bottom-color:#7d8b94;background:linear-gradient(#fff,#e5e7eb);color:#17202a;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.table-scroll{margin:1rem 0;overflow-x:auto}table{width:100%;table-layout:fixed;border-collapse:collapse}td,th{padding:.5rem .6rem;border:0;border-right:1px solid #d8dee5;border-bottom:1px solid #d8dee5;vertical-align:top;text-align:left;overflow-wrap:anywhere}td:last-child,th:last-child{border-right:0}tr:first-child td{background:var(--nav);color:var(--nav-ink);font-weight:700}tr:nth-child(odd):not(:first-child) td{background:#f3f6f7}figure{margin:1.6rem auto;text-align:center}figure img{display:block;max-width:100%;max-height:70vh;margin:auto}.mermaid-diagram svg{display:block;width:100%;max-width:70rem;height:auto;max-height:70vh;margin:auto}.mermaid-diagram .nodeLabel,.mermaid-diagram .edgeLabel{font-family:Inter,ui-sans-serif,system-ui,sans-serif}figcaption{margin-top:.35rem;color:var(--muted);font-size:.8rem;font-style:italic}.callout{--callout-color:var(--info);margin:1.3rem 0;padding:1rem 1.1rem;border-left:.35rem solid var(--callout-color);background:#eef8f8}.callout-danger{--callout-color:var(--danger);background:#fff0ee}.callout-title{display:flex;gap:.5rem;align-items:center;font-weight:800;color:var(--callout-color)}.callout-body>:first-child{margin-top:.5rem}.callout-body>:last-child{margin-bottom:0}.broken-link{color:var(--danger);text-decoration:underline wavy}.task.checked{list-style:'☑  '}.task.unchecked{list-style:'☐  '}.no-results{padding:3rem;text-align:center;color:var(--muted)}${callouts}@media(max-width:850px){.nav-toggle{display:block;position:fixed;right:1rem;top:1rem;z-index:3}.sidebar{transform:translateX(-105%);transition:transform .2s;z-index:2}.sidebar.open{transform:none}.manual{margin-left:0}.manual-page{margin:1rem;padding:2rem 1.2rem}.manual-section-divider{margin:-2rem -1.2rem 2rem;padding:2rem}.manual-page-content.columns-2{column-count:1}}@media print{.sidebar,.nav-toggle,.search{display:none!important}.manual{margin:0}.hero{break-after:page}.manual-page{max-width:none;margin:0;padding:1.4cm;box-shadow:none;break-before:page}.manual-section-divider{min-height:24cm;margin:-1.4cm -1.4cm 1.4cm;break-after:page}}`;
 }
 
@@ -154,7 +157,7 @@ export async function renderHtml(model: ManualModel, config: ResolvedConfig): Pr
     logo = `assets/brand/logo${extension}`;
     assets.set(config.logo, logo);
   }
-  const pages = model.pages.map((page) => renderPage(model, page, assets, config.layout.columns)).join("\n");
+  const pages = model.pages.map((page) => renderPage(model, page, assets, config)).join("\n");
   for (const [source, relative] of assets) {
     const destination = path.join(site, relative);
     await mkdir(path.dirname(destination), { recursive: true });
