@@ -167,6 +167,21 @@ render hook. Put a directive immediately before the table:
 following content to share the same generated PDF page. Unknown options, invalid numbers, column
 count mismatches, and directives that are not directly followed by a table fail the build.
 
+## Image directives
+
+Size a standalone image from its Markdown source with a directive immediately before it:
+
+```md
+<!-- image: width=72% -->
+![System diagram](system.png)
+```
+
+Widths accept positive percentages up to `100%`, CSS pixels such as `320px`, or PDF points such as
+`240pt`. Pixel widths are converted to points for PDF output. The directive is removed from both
+outputs and fails the build unless the next block is a standalone image. PDF pagination keeps every
+heading with the first meaningful block that follows it, including an image, paragraph, table,
+list, callout, or code block.
+
 ## Mermaid diagrams
 
 Use an ordinary fenced Mermaid block:

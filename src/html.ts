@@ -4,6 +4,7 @@ import { zipSync, type Zippable } from "fflate";
 import type { ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
 import { resolvePageLink, slug } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
+import { imageDisplayWidth } from "./images.js";
 import { calloutAppearance } from "./callouts.js";
 
 function escape(value: string): string {
@@ -92,7 +93,8 @@ function renderNode(node: ManualNode, context: RenderContext): string {
       const image = node.type === "wikiImage" ? wikiImage(context.model, context.page, node.url ?? "") : localImage(context.model, context.page, node.url ?? "");
       context.assets.set(image.source, image.output);
       const alt = node.alt ?? node.value ?? "";
-      return `<figure><img src="${escape(image.href)}" alt="${escape(alt)}" loading="lazy"><figcaption>${escape(alt)}</figcaption></figure>`;
+      const width = imageDisplayWidth(node);
+      return `<figure><img src="${escape(image.href)}" alt="${escape(alt)}" loading="lazy"${width ? ` style="width:${escape(width)}"` : ""}><figcaption>${escape(alt)}</figcaption></figure>`;
     }
     case "blockquote": return `<blockquote>${renderChildren(node, context)}</blockquote>`;
     case "callout": {

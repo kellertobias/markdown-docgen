@@ -98,4 +98,25 @@ describe("Obsidian Markdown extensions", () => {
 `);
     await expect(loadManual(root)).rejects.toThrow("defines 3 columns, but the table has 2");
   });
+
+  it("applies validated image widths to standalone images", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "manual-image-directive-"));
+    await writeFile(path.join(root, "diagram.png"), "image fixture");
+    await writeFile(path.join(root, "index.md"), `# Images
+
+<!-- image: width=72% -->
+![System diagram](diagram.png)
+`);
+    const model = await loadManual(root);
+    const paragraph = model.pages[0].nodes.find((node) => node.type === "paragraph");
+    expect(paragraph?.children?.[0].data).toMatchObject({ displayWidth: "72%" });
+    expect(model.pages[0].nodes.some((node) => node.type === "html")).toBe(false);
+
+    await writeFile(path.join(root, "index.md"), `# Images
+
+<!-- image: width=101% -->
+![System diagram](diagram.png)
+`);
+    await expect(loadManual(root)).rejects.toThrow("percentage width cannot exceed 100%");
+  });
 });

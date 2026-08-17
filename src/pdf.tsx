@@ -18,6 +18,7 @@ import type { ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./type
 import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
 import { calloutAppearance } from "./callouts.js";
+import { imageDisplayWidth, imageWidthFraction } from "./images.js";
 
 const require = createRequire(import.meta.url);
 Font.register({
@@ -99,6 +100,14 @@ function standaloneImage(node: ManualNode): ManualNode | undefined {
   if (node.type !== "paragraph") return undefined;
   const meaningful = (node.children ?? []).filter((child) => child.type !== "text" || child.value?.trim());
   return meaningful.length === 1 && ["image", "wikiImage"].includes(meaningful[0].type) ? meaningful[0] : undefined;
+}
+
+function pdfImageWidth(node: ManualNode): string | number | undefined {
+  const width = imageDisplayWidth(node);
+  if (!width) return undefined;
+  const value = Number.parseFloat(width);
+  if (width.endsWith("%")) return width;
+  return width.endsWith("px") ? value * 0.75 : value;
 }
 
 function keyPresentation(node: ManualNode): React.ReactNode | undefined {
@@ -217,7 +226,8 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     case "wikiImage": {
       const src = localImage(context, node.url ?? "");
       const caption = node.alt ?? node.value ?? "";
-      return <View key={key} style={base.figure} wrap={false}><Image src={src} style={base.image} />{caption ? <Text style={base.caption}>{caption}</Text> : null}</View>;
+      const width = pdfImageWidth(node);
+      return <View key={key} style={base.figure} wrap={false}><Image src={src} style={[base.image, width ? { width } : {}]} />{caption ? <Text style={base.caption}>{caption}</Text> : null}</View>;
     }
     default: {
       const children = blockNodes(node.children, context);
@@ -322,14 +332,16 @@ function ManualDocument({ model, config, content, toc }: { model: ManualModel; c
 
 function estimateNode(node: ManualNode): number {
   const length = plain(node).trim().length;
-  if (standaloneImage(node)) return 28;
+  const image = standaloneImage(node);
+  if (image) return Math.max(8, 28 * imageWidthFraction(image));
   if (node.type === "heading") return Number(node.data?.effectiveDepth ?? node.depth ?? 1) <= 2 ? 6 : 3;
   if (node.type === "paragraph") return Math.max(1.5, Math.ceil(length / 88) * 1.25);
   if (node.type === "table") {
     const rowWeight = Number(node.data?.rowWeight ?? 3.7);
     return Math.max(10, (node.children?.length ?? 1) * rowWeight);
   }
-  if (["image", "wikiImage", "mermaid"].includes(node.type)) return 28;
+  if (["image", "wikiImage"].includes(node.type)) return Math.max(8, 28 * imageWidthFraction(node));
+  if (node.type === "mermaid") return 28;
   if (node.type === "code") return Math.max(4, (node.value?.split("\n").length ?? 1) * 1.1);
   if (node.type === "list") return Math.max(2, (node.children ?? []).reduce((sum, child) => sum + estimateNode(child), 0));
   return Math.max(1, (node.children ?? []).reduce((sum, child) => sum + estimateNode(child), 0));
@@ -356,10 +368,15 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
     let end = start;
     let weight = 0;
     while (end < expanded.length) {
-      const candidateWeight = estimateNode(expanded[end]);
+      let unitEnd = end + 1;
+      if (expanded[end].type === "heading") {
+        while (unitEnd < expanded.length && expanded[unitEnd].type === "heading") unitEnd += 1;
+        if (unitEnd < expanded.length) unitEnd += 1;
+      }
+      const candidateWeight = expanded.slice(end, unitEnd).reduce((sum, node) => sum + estimateNode(node), 0);
       if (end > start && weight + candidateWeight > maximum) break;
       weight += candidateWeight;
-      end += 1;
+      end = unitEnd;
       if (expanded[end - 1]?.type === "table" && expanded[end - 1]?.data?.continueAfterTable !== true) break;
     }
     const nodes = expanded.slice(start, end);

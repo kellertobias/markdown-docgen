@@ -10,6 +10,7 @@ import { expandEnvironment } from "./environment.js";
 import { renderMermaidNodes } from "./mermaid.js";
 import { applyRenderHooks } from "./hooks.js";
 import { applyTableDirectives } from "./tables.js";
+import { applyImageDirectives } from "./images.js";
 
 type AstNode = ManualNode & { position?: unknown };
 
@@ -49,6 +50,7 @@ function splitInlineTokens(nodes: ManualNode[], patterns: InlineTokenPattern[]):
     const expression = new RegExp(definition.pattern, flags);
     current = current.flatMap((node) => {
       if (!["text", "inlineCode", "html"].includes(node.type) || node.value === undefined) return [node];
+      if (node.type === "html" && /^<!--[\s\S]*-->$/u.test(node.value.trim())) return [node];
       if (node.type === "html" && /^<\/?(?:a|abbr|b|br|code|del|em|i|img|kbd|mark|small|span|strong|sub|sup|time)(?:\s[^>]*)?\s*\/?>$/iu.test(node.value)) return [node];
       const remainderType = node.type === "html" ? "text" : node.type;
       const output: ManualNode[] = [];
@@ -155,7 +157,7 @@ export async function loadManual(sourceRoot: string, options: { chapterIndexName
     } catch (error) {
       throw new Error(`${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
     }
-    let nodes = applyTableDirectives(parseMarkdown(source, options.inlineTokens), relativePath);
+    let nodes = applyImageDirectives(applyTableDirectives(parseMarkdown(source, options.inlineTokens), relativePath), relativePath);
     if (options.hooks?.length) nodes = applyRenderHooks(nodes, options.hooks, { relativePath });
     const h1 = nodes.filter((node) => node.type === "heading" && node.depth === 1);
     if (h1.length !== 1) throw new Error(`${relativePath} must contain exactly one first-level heading`);

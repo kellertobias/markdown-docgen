@@ -45,6 +45,7 @@ line.
 Hard source${"  "}
 line.
 
+<!-- image: width=72% -->
 ![Operator screenshot](screenshot.png)
 `);
     await writeFile(path.join(source, "screenshot.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAACAAAAASCAIAAAC1qksFAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjYtMDgtMTdUMDA6NTU6NDIrMDA6MDCJOGoUAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDI2LTA4LTE3VDAwOjU1OjQyKzAwOjAw+GXSqAAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyNi0wOC0xN1QwMDo1NTo0MiswMDowMK9w83cAAAAhSURBVDjLY+Tvb2KgJWCiqemjFoxaMGrBqAWjFoxaAAUAK5sBRBWab+AAAAAASUVORK5CYII=", "base64"));
@@ -115,6 +116,7 @@ example
     expect(html).toContain('class="manual-section-divider"');
     expect(html).toContain('<h2 id="page-01-chapter-index-md-prepare">Prepare</h2>');
     expect(html).toContain('manual-key-record');
+    expect(html).toContain('style="width:72%"');
     expect(html).toContain('class="manual-command-line"');
     expect(html).toContain('M8 1.7 2.2 7.3');
     expect(html).toContain('M6.2 3H14v10');
