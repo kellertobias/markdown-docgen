@@ -1,3 +1,7 @@
+## 1.1.0 (2026-08-17)
+
+* feat: add Markdown table and control presentations ([f22eb33](https://git.tokenet.de/opensource/md-docs-gen/commit/f22eb33))
+
 ## <small>1.0.4 (2026-08-17)</small>
 
 * fix: fill PDF contents pages vertically ([d790e28](https://git.tokenet.de/opensource/md-docs-gen/commit/d790e28))
