@@ -1,3 +1,7 @@
+## 1.2.0 (2026-08-17)
+
+* feat: add image sizing and heading pagination ([5d654f8](https://git.tokenet.de/opensource/md-docs-gen/commit/5d654f8))
+
 ## 1.1.0 (2026-08-17)
 
 * feat: add Markdown table and control presentations ([f22eb33](https://git.tokenet.de/opensource/md-docs-gen/commit/f22eb33))
