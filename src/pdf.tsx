@@ -170,7 +170,11 @@ function renderTableCell(cell: ManualNode, context: PdfContext, header: boolean)
 
 function renderBlock(node: ManualNode, context: PdfContext, key: string): React.ReactNode {
   switch (node.type) {
-    case "paragraph": return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
+    case "paragraph": {
+      const image = standaloneImage(node);
+      if (image) return renderBlock(image, context, `${key}-image`);
+      return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
+    }
     case "heading": {
       const heading = context.page.headings[context.headingIndex++];
       const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
@@ -305,6 +309,7 @@ function ManualDocument({ model, config, content, toc }: { model: ManualModel; c
 
 function estimateNode(node: ManualNode): number {
   const length = plain(node).trim().length;
+  if (standaloneImage(node)) return 28;
   if (node.type === "heading") return Number(node.data?.effectiveDepth ?? node.depth ?? 1) <= 2 ? 6 : 3;
   if (node.type === "paragraph") return Math.max(1.5, Math.ceil(length / 88) * 1.25);
   if (node.type === "table") {

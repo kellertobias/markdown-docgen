@@ -2,7 +2,7 @@ import { mkdtemp, mkdir, readFile, stat, writeFile } from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { PDFDocument } from "pdf-lib";
+import { PDFDocument, PDFName, PDFRawStream } from "pdf-lib";
 import { loadConfig } from "../src/config.js";
 import { renderHtml } from "../src/html.js";
 import { loadRenderHooks } from "../src/hooks.js";
@@ -40,7 +40,10 @@ line.
 
 Hard source${"  "}
 line.
+
+![Operator screenshot](screenshot.png)
 `);
+    await writeFile(path.join(source, "screenshot.png"), Buffer.from("iVBORw0KGgoAAAANSUhEUgAAACAAAAASCAIAAAC1qksFAAAAIGNIUk0AAHomAACAhAAA+gAAAIDoAAB1MAAA6mAAADqYAAAXcJy6UTwAAAAGYktHRAD/AP8A/6C9p5MAAAAldEVYdGRhdGU6Y3JlYXRlADIwMjYtMDgtMTdUMDA6NTU6NDIrMDA6MDCJOGoUAAAAJXRFWHRkYXRlOm1vZGlmeQAyMDI2LTA4LTE3VDAwOjU1OjQyKzAwOjAw+GXSqAAAACh0RVh0ZGF0ZTp0aW1lc3RhbXAAMjAyNi0wOC0xN1QwMDo1NTo0MiswMDowMK9w83cAAAAhSURBVDjLY+Tvb2KgJWCiqemjFoxaMGrBqAWjFoxaAAUAK5sBRBWab+AAAAAASUVORK5CYII=", "base64"));
     await writeFile(path.join(source, "01-Chapter", "index.md"), `# Operations
 
 ## Prepare
@@ -109,6 +112,11 @@ example
     expect((await stat(config.output.pdf)).size).toBeGreaterThan(1_000);
     expect((await readFile(config.output.pdf)).subarray(0, 4).toString()).toBe("%PDF");
     const pdf = await PDFDocument.load(await readFile(config.output.pdf));
+    const embeddedScreenshots = pdf.context.enumerateIndirectObjects().filter(([, object]) => object instanceof PDFRawStream
+      && object.dict.get(PDFName.of("Subtype"))?.toString() === "/Image"
+      && object.dict.get(PDFName.of("Width"))?.toString() === "32"
+      && object.dict.get(PDFName.of("Height"))?.toString() === "18");
+    expect(embeddedScreenshots.length).toBeGreaterThan(0);
     for (const page of pdf.getPages()) {
       const { width, height } = page.getSize();
       expect(width).toBeCloseTo(595.28, 1);
