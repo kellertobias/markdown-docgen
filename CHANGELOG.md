@@ -1,3 +1,7 @@
+## <small>1.3.3 (2026-08-17)</small>
+
+* fix: tighten shift chord overlap ([56bf33e](https://git.tokenet.de/opensource/md-docs-gen/commit/56bf33e))
+
 ## <small>1.3.2 (2026-08-17)</small>
 
 * fix: render shift chords without plus separators ([8138aa6](https://git.tokenet.de/opensource/md-docs-gen/commit/8138aa6))
