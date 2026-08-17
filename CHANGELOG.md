@@ -1,3 +1,7 @@
+## <small>1.0.3 (2026-08-17)</small>
+
+* fix: render standalone images in PDF paragraphs ([39a46fe](https://git.tokenet.de/opensource/md-docs-gen/commit/39a46fe))
+
 ## <small>1.0.2 (2026-08-17)</small>
 
 * fix: render Obsidian callouts and Markdown breaks ([4987597](https://git.tokenet.de/opensource/md-docs-gen/commit/4987597))
