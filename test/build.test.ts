@@ -20,6 +20,8 @@ Read [[01-Chapter/index|Operations]].
 
 Software version: \${SOFTWARE_VERSION}.
 
+Unlisted secret: \${SECRET_VALUE}.
+
 Press [REC].
 
 \`\`\`mermaid
@@ -62,10 +64,11 @@ example
       pdf: { header: "{title} - {chapter}" },
     }));
     process.env.MANUAL_TEST_VERSION = "1.2.3";
-    const config = await loadConfig(configPath);
+    const config = await loadConfig(configPath, { environment: process.env, allowedEnvironmentVariables: ["MANUAL_TEST_VERSION"] });
     const hooks = await loadRenderHooks(config.hookModules);
     const model = await loadManual(source, {
       environment: { ...process.env, SOFTWARE_VERSION: "9.8.7" },
+      allowedEnvironmentVariables: ["SOFTWARE_VERSION"],
       mermaid: config.mermaid,
       hooks,
       inlineTokens: config.inlineTokens,
@@ -82,6 +85,7 @@ example
     expect(html).not.toContain("[!danger]");
     expect(html).toContain('href="#page-01-chapter-index-md"');
     expect(html).toContain("Software version: 9.8.7");
+    expect(html).toContain("Unlisted secret: ${SECRET_VALUE}");
     expect(html).toContain('class="mermaid-diagram"');
     expect(html).toContain('manual-page-content columns-2');
     expect(html).toContain('class="manual-section-divider"');

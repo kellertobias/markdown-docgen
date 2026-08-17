@@ -12,6 +12,8 @@ const result = spawnSync(
     path.join(directory, "docs"),
     "--config",
     path.join(directory, "manual.config.json"),
+    "--allowed-env-vars",
+    "EXAMPLE_VERSION",
   ],
   {
     env: { ...process.env, EXAMPLE_VERSION: process.env.EXAMPLE_VERSION ?? "0.1.0-example" },

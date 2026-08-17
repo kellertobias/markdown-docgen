@@ -1,5 +1,5 @@
 export { loadConfig } from "./config.js";
-export { expandEnvironment } from "./environment.js";
+export { expandEnvironment, parseAllowedEnvironmentVariables } from "./environment.js";
 export { applyRenderHooks, loadRenderHooks } from "./hooks.js";
 export { loadManual, parseMarkdown, resolvePageLink, slug } from "./markdown.js";
 export { renderHtml } from "./html.js";

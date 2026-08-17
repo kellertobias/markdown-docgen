@@ -3,12 +3,20 @@ import os from "node:os";
 import path from "node:path";
 import { describe, expect, it } from "vitest";
 import { loadManual, parseMarkdown } from "../src/markdown.js";
-import { expandEnvironment } from "../src/environment.js";
+import { expandEnvironment, parseAllowedEnvironmentVariables } from "../src/environment.js";
 
 describe("Obsidian Markdown extensions", () => {
-  it("expands required environment placeholders and preserves escaped placeholders", () => {
-    expect(expandEnvironment("Version ${APP_VERSION}; literal \\${APP_VERSION}", { APP_VERSION: "4.2.0" })).toBe("Version 4.2.0; literal ${APP_VERSION}");
-    expect(() => expandEnvironment("Version ${MISSING_VERSION}", {})).toThrow("environment variable MISSING_VERSION is required");
+  it("expands only explicitly allowed environment placeholders", () => {
+    expect(expandEnvironment("Version ${APP_VERSION}; secret ${SECRET_VALUE}; literal \\${APP_VERSION}", { APP_VERSION: "4.2.0", SECRET_VALUE: "must-not-leak" }, ["APP_VERSION"]))
+      .toBe("Version 4.2.0; secret ${SECRET_VALUE}; literal ${APP_VERSION}");
+    expect(() => expandEnvironment("Version ${MISSING_VERSION}", {}, ["MISSING_VERSION"])).toThrow("environment variable MISSING_VERSION is required");
+    expect(expandEnvironment("Version ${APP_VERSION}", { APP_VERSION: "4.2.0" })).toBe("Version ${APP_VERSION}");
+  });
+
+  it("parses and validates comma-separated allowed environment names", () => {
+    expect(parseAllowedEnvironmentVariables("APP_VERSION, BUILD_NUMBER,APP_VERSION")).toEqual(["APP_VERSION", "BUILD_NUMBER"]);
+    expect(parseAllowedEnvironmentVariables(undefined)).toEqual([]);
+    expect(() => parseAllowedEnvironmentVariables("APP_VERSION,lowercase")).toThrow("invalid allowed environment variable name: lowercase");
   });
 
   it("normalizes callouts and wikilinks in the shared AST", () => {

@@ -21,11 +21,11 @@ function absolute(base: string, value: string | undefined): string | undefined {
   return value ? path.resolve(base, value) : undefined;
 }
 
-export async function loadConfig(configPath: string): Promise<ResolvedConfig> {
+export async function loadConfig(configPath: string, options: { environment?: NodeJS.ProcessEnv; allowedEnvironmentVariables?: Iterable<string> } = {}): Promise<ResolvedConfig> {
   const absoluteConfig = path.resolve(configPath);
   const directory = path.dirname(absoluteConfig);
   const raw = await readFile(absoluteConfig, "utf8");
-  const expanded = expandEnvironment(raw);
+  const expanded = expandEnvironment(raw, options.environment, options.allowedEnvironmentVariables);
   const parsed = JSON.parse(expanded) as ManualConfig;
   if (!parsed.title?.trim()) throw new Error("manual config must define a title");
   if (!parsed.output?.htmlDir || !parsed.output.pdf) {

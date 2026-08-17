@@ -37,6 +37,7 @@ custom render hook.
 npx --package @tobisk/markdown-manuals markdown-manual build \
   --source docs/help \
   --config docs/help/manual.json \
+  --allowed-env-vars LIGHT_MANUAL_VERSION \
   --html-dir .artifacts/manual/html \
   --html-archive .artifacts/manual/manual-html.zip \
   --pdf .artifacts/manual/manual.pdf
@@ -103,9 +104,12 @@ the config file; CLI paths are resolved relative to the current working director
 ```
 
 `${NAME}` placeholders in both the JSON configuration and Markdown sources are read from the
-environment. An unset variable fails the build, so a release cannot silently contain an empty
-version. Write `\${NAME}` when the literal placeholder syntax should be printed. Inline-token
-patterns are JavaScript regular-expression sources and must not match an empty string.
+environment only when `NAME` is listed by `--allowed-env-vars`. The option accepts a comma-separated
+allowlist such as `--allowed-env-vars APP_VERSION,BUILD_NUMBER`. Unlisted placeholders remain
+literal even when the process has a matching environment variable, preventing Markdown from
+accidentally exposing CI secrets or other ambient values. An allowed but unset variable fails the
+build. Write `\${NAME}` when the literal placeholder syntax should be printed. Inline-token patterns
+are JavaScript regular-expression sources and must not match an empty string.
 
 `layout.columns` accepts `1` or `2`. In two-column mode, major headings, tables, figures, code,
 and callouts span both columns. With `hierarchyHeadings` enabled, a folder index keeps the folder's

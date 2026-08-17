@@ -142,7 +142,7 @@ function normalizeRelative(value: string): string {
   return value.split(path.sep).join("/");
 }
 
-export async function loadManual(sourceRoot: string, options: { chapterIndexNames?: string[]; inlineTokens?: InlineTokenPattern[]; environment?: NodeJS.ProcessEnv; mermaid?: ManualMermaidConfig; hooks?: ManualRenderHook[]; hierarchyHeadings?: boolean; maxHeadingDepth?: number } = {}): Promise<ManualModel> {
+export async function loadManual(sourceRoot: string, options: { chapterIndexNames?: string[]; inlineTokens?: InlineTokenPattern[]; environment?: NodeJS.ProcessEnv; allowedEnvironmentVariables?: Iterable<string>; mermaid?: ManualMermaidConfig; hooks?: ManualRenderHook[]; hierarchyHeadings?: boolean; maxHeadingDepth?: number } = {}): Promise<ManualModel> {
   const root = path.resolve(sourceRoot);
   const chapterIndexNames = options.chapterIndexNames ?? ["index.md", "index.markdown"];
   const pages: SourcePage[] = [];
@@ -150,7 +150,7 @@ export async function loadManual(sourceRoot: string, options: { chapterIndexName
     const relativePath = normalizeRelative(path.relative(root, absolutePath));
     let source: string;
     try {
-      source = expandEnvironment(await readFile(absolutePath, "utf8"), options.environment);
+      source = expandEnvironment(await readFile(absolutePath, "utf8"), options.environment, options.allowedEnvironmentVariables);
     } catch (error) {
       throw new Error(`${relativePath}: ${error instanceof Error ? error.message : String(error)}`);
     }

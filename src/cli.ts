@@ -5,6 +5,7 @@ import { renderHtml } from "./html.js";
 import { loadManual } from "./markdown.js";
 import { renderPdf } from "./pdf.js";
 import { loadRenderHooks } from "./hooks.js";
+import { parseAllowedEnvironmentVariables } from "./environment.js";
 
 interface Arguments {
   command?: string;
@@ -13,14 +14,16 @@ interface Arguments {
   htmlDir?: string;
   htmlArchive?: string;
   pdf?: string;
+  allowedEnvVars?: string;
 }
 
 function usage(): string {
   return `Usage:
-  markdown-manual build --source <dir> --config <json> [--html-dir <dir>] [--html-archive <zip>] [--pdf <file>]
+  markdown-manual build --source <dir> --config <json> [--allowed-env-vars <NAME,...>] [--html-dir <dir>] [--html-archive <zip>] [--pdf <file>]
 
 The JSON config supplies branding, theme and default output paths. Command-line output paths
-override the config and are resolved from the current working directory.`;
+override the config and are resolved from the current working directory. Only environment variables
+listed by --allowed-env-vars are substituted in the config and Markdown sources.`;
 }
 
 function parseArguments(argv: string[]): Arguments {
@@ -34,6 +37,7 @@ function parseArguments(argv: string[]): Arguments {
     else if (option === "--html-dir") result.htmlDir = value;
     else if (option === "--html-archive") result.htmlArchive = value;
     else if (option === "--pdf") result.pdf = value;
+    else if (option === "--allowed-env-vars") result.allowedEnvVars = value;
     else throw new Error(`unknown option: ${option}`);
     index += 1;
   }
@@ -47,7 +51,8 @@ export async function run(argv = process.argv.slice(2)): Promise<void> {
   }
   const args = parseArguments(argv);
   if (args.command !== "build" || !args.source || !args.config) throw new Error(usage());
-  const config = await loadConfig(args.config);
+  const allowedEnvironmentVariables = parseAllowedEnvironmentVariables(args.allowedEnvVars);
+  const config = await loadConfig(args.config, { allowedEnvironmentVariables });
   const hooks = await loadRenderHooks(config.hookModules);
   if (args.htmlDir) config.output.htmlDir = path.resolve(args.htmlDir);
   if (args.htmlArchive) config.output.htmlArchive = path.resolve(args.htmlArchive);
@@ -59,6 +64,7 @@ export async function run(argv = process.argv.slice(2)): Promise<void> {
     hooks,
     hierarchyHeadings: config.layout.hierarchyHeadings,
     maxHeadingDepth: config.layout.maxHeadingDepth,
+    allowedEnvironmentVariables,
   });
   await renderHtml(model, config);
   await renderPdf(model, config);
