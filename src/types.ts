@@ -30,13 +30,20 @@ export interface ManualMermaidConfig {
   browserArgs?: string[];
 }
 
-export interface ManualKeyPresentation {
-  component: "key-sequence";
-  keys: Array<{
+export interface ManualKey {
     label: string;
     icon?: "shift" | "backspace";
     variant?: "regular" | "record" | "clear" | "preload" | "keyboard" | "shift";
-  }>;
+}
+
+export interface ManualKeyPresentation {
+  component: "key-sequence";
+  keys: ManualKey[];
+}
+
+export interface ManualControlSequencePresentation {
+  component: "control-sequence";
+  segments: Array<{ text?: string; keys?: ManualKey[] }>;
 }
 
 export interface ManualRenderHookContext {
@@ -108,6 +115,7 @@ export interface ManualHeading {
   sourceDepth: number;
   title: string;
   id: string;
+  excludeFromContents?: boolean;
 }
 
 export interface SourcePage {

@@ -28,6 +28,8 @@ Press [SHIFT] and [BACK].
 
 Command: \`#> FIXTURE 1 AT 100\`.
 
+Keys: \`1 [REC]\`.
+
 \`\`\`mermaid
 flowchart LR
   Desk[Control] --> Output[DMX Output]
@@ -67,7 +69,8 @@ example
     await writeFile(path.join(root, "manual-hooks.mjs"), `export default {
   name: "test-keys",
   transform(node) {
-    if (node.type === "inlineCode" && node.value.startsWith("#>")) return { ...node, data: { ...node.data, presentation: { component: "command-line" } } };
+    if (node.type === "inlineCode" && node.value.startsWith("#>")) return { ...node, value: node.value.slice(2).trimStart(), data: { ...node.data, presentation: { component: "command-line" } } };
+    if (node.type === "inlineCode" && node.value.includes("[REC]")) return { ...node, data: { ...node.data, presentation: { component: "control-sequence", segments: [{ text: "1 " }, { keys: [{ label: "REC", variant: "record" }] }] } } };
     if (node.type === "inlineToken") {
       const icon = node.value === "SHIFT" ? "shift" : node.value === "BACK" ? "backspace" : undefined;
       return { ...node, data: { ...node.data, presentation: { component: "key-sequence", keys: [{ label: node.value, icon, variant: node.value === "REC" ? "record" : "regular" }] } } };
@@ -118,6 +121,8 @@ example
     expect(html).toContain('manual-key-record');
     expect(html).toContain('style="width:72%"');
     expect(html).toContain('class="manual-command-line"');
+    expect(html).toContain('class="manual-control-sequence"');
+    expect(html).not.toContain("#&gt; FIXTURE");
     expect(html).toContain('M8 1.7 2.2 7.3');
     expect(html).toContain('M6.2 3H14v10');
     expect(html).toContain("<svg");

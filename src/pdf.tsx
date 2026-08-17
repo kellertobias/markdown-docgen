@@ -14,7 +14,7 @@ import {
   View,
   renderToFile,
 } from "@react-pdf/renderer";
-import type { ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
+import type { ManualControlSequencePresentation, ManualKey, ManualModel, ManualNode, ResolvedConfig, SourcePage } from "./types.js";
 import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
 import { calloutAppearance } from "./callouts.js";
@@ -54,8 +54,9 @@ const base = StyleSheet.create({
   image: { maxWidth: "100%", maxHeight: 390, objectFit: "contain" },
   caption: { marginTop: 3, fontSize: 7, color: "#64748b", textAlign: "center" },
   rule: { height: 1, marginVertical: 7 },
-  inlineToken: { fontFamily: "Helvetica-Bold", fontSize: 7.3, paddingHorizontal: 4, paddingVertical: 1.5, borderWidth: 0.7, borderBottomWidth: 2.2, borderRadius: 3 },
-  commandLine: { fontFamily: "Courier-Bold", fontSize: 7.4, paddingHorizontal: 4, paddingVertical: 1.5, borderWidth: 0.7, borderBottomWidth: 2, borderRadius: 3, borderColor: "#aeb8c2", backgroundColor: "#4b5563", color: "#ffffff" },
+  inlineToken: { fontFamily: "Helvetica-Bold", fontSize: 7.3, lineHeight: 1.55, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2.2, borderRadius: 5 },
+  commandLine: { fontFamily: "Courier-Bold", fontSize: 7.4, lineHeight: 1.55, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2, borderRadius: 5, borderColor: "#aeb8c2", backgroundColor: "#4b5563", color: "#ffffff" },
+  controlSequence: { fontFamily: "Courier-Bold", fontSize: 7.4, lineHeight: 1.75, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 0.8, borderRadius: 6, borderColor: "#334554", backgroundColor: "#071621", color: "#f4f7f9" },
   contentsItem: { flexDirection: "row", alignItems: "center", minHeight: 16 },
   contentsLabel: { flexGrow: 1 },
   coverEyebrow: { fontFamily: "Helvetica-Bold", fontSize: 9, letterSpacing: 2.2, textTransform: "uppercase" },
@@ -71,6 +72,11 @@ const base = StyleSheet.create({
   keyPreload: { borderColor: "#4ea8de", borderBottomColor: "#15577e", backgroundColor: "#123d58", color: "#8bd3ff" },
   keyKeyboard: { borderColor: "#d8dee5", borderBottomColor: "#8b98a4", backgroundColor: "#ffffff", color: "#17202a", fontFamily: "Courier-Bold" },
   keyShift: { borderColor: "#8d99a6", borderBottomColor: "#20272e", backgroundColor: "#39434d", color: "#ffffff" },
+  richLine: { flexDirection: "row", flexWrap: "wrap", alignItems: "center" },
+  keyBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2.2, borderRadius: 5 },
+  keyGroup: { flexDirection: "row", alignItems: "center" },
+  commandBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 2.5, borderWidth: 0.8, borderBottomWidth: 2, borderRadius: 5, borderColor: "#aeb8c2", backgroundColor: "#4b5563" },
+  controlBox: { flexDirection: "row", alignItems: "center", marginHorizontal: 1, marginVertical: 0.5, paddingHorizontal: 5, paddingVertical: 3, borderWidth: 0.8, borderRadius: 6, borderColor: "#334554", backgroundColor: "#071621" },
 });
 
 interface PdfContext {
@@ -110,10 +116,8 @@ function pdfImageWidth(node: ManualNode): string | number | undefined {
   return width.endsWith("px") ? value * 0.75 : value;
 }
 
-function keyPresentation(node: ManualNode): React.ReactNode | undefined {
-  const presentation = node.data?.presentation as { component?: string; keys?: Array<{ label?: string; icon?: string; variant?: string }> } | undefined;
-  if (presentation?.component !== "key-sequence" || !presentation.keys) return undefined;
-  return <Text style={base.keySequence}>{presentation.keys.map((key, index) => {
+function renderKeys(keys: ManualKey[]): React.ReactNode {
+  return <Text style={base.keySequence}>{keys.map((key, index) => {
     const style = key.variant === "record" ? base.keyRecord
       : key.variant === "clear" ? base.keyClear
         : key.variant === "preload" ? base.keyPreload
@@ -121,8 +125,76 @@ function keyPresentation(node: ManualNode): React.ReactNode | undefined {
             : key.variant === "shift" ? base.keyShift
               : base.keyRegular;
     const icon = key.icon === "shift" ? "⇧" : key.icon === "backspace" ? "⌫" : "";
-    return <Text key={`${key.label}-${index}`}>{index ? <Text style={{ color: "#64748b" }}> + </Text> : null}<Text style={[base.inlineToken, style]}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon} </Text> : null}{key.label}</Text></Text>;
+    return <Text key={`${key.label}-${index}`}>{index ? <Text style={{ color: "#94a3b8" }}> + </Text> : null}<Text style={[base.inlineToken, style]}>{"\u00a0"}{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon} </Text> : null}{key.label}{"\u00a0"}</Text></Text>;
   })}</Text>;
+}
+
+function keyStyle(key: ManualKey): object {
+  return key.variant === "record" ? base.keyRecord
+    : key.variant === "clear" ? base.keyClear
+      : key.variant === "preload" ? base.keyPreload
+        : key.variant === "keyboard" ? base.keyKeyboard
+          : key.variant === "shift" ? base.keyShift
+            : base.keyRegular;
+}
+
+function keyBoxes(keys: ManualKey[], prefix: string): React.ReactNode {
+  return <View style={base.keyGroup}>{keys.map((key, index) => {
+    const icon = key.icon === "shift" ? "⇧" : key.icon === "backspace" ? "⌫" : "";
+    const style = keyStyle(key) as { color?: string };
+    return <React.Fragment key={`${prefix}-${key.label}-${index}`}>{index ? <Text style={{ marginHorizontal: 2, color: "#64748b", fontSize: 6.8 }}>+</Text> : null}<View style={[base.keyBox, style]}><Text style={{ fontFamily: key.variant === "keyboard" ? "Courier-Bold" : "Helvetica-Bold", fontSize: 7.3, color: style.color ?? "#f4f7f9" }}>{icon ? <Text style={{ fontFamily: "ManualSymbols" }}>{icon} </Text> : null}{key.label}</Text></View></React.Fragment>;
+  })}</View>;
+}
+
+function hasPresentation(nodes: ManualNode[] | undefined): boolean {
+  return (nodes ?? []).some((node) => Boolean((node.data?.presentation as { component?: string } | undefined)?.component) || hasPresentation(node.children));
+}
+
+function presentationCount(nodes: ManualNode[] | undefined): number {
+  return (nodes ?? []).reduce((count, node) => count + (Boolean((node.data?.presentation as { component?: string } | undefined)?.component) ? 1 : 0) + presentationCount(node.children), 0);
+}
+
+function flowText(value: string, style: any, prefix: string): React.ReactNode[] {
+  return (value.replace(/\r?\n/gu, " ").match(/\S+\s*|\s+/gu) ?? []).map((part, index) => <Text key={`${prefix}-${index}`} style={style}>{part}</Text>);
+}
+
+function flowNodes(nodes: ManualNode[] | undefined, context: PdfContext, inherited: any = {}, prefix = "flow"): React.ReactNode[] {
+  return (nodes ?? []).flatMap((node, index) => {
+    const key = `${prefix}-${node.type}-${index}`;
+    if (node.type === "text") return flowText(node.value ?? "", inherited, key);
+    if (node.type === "strong") return flowNodes(node.children, context, { ...inherited, fontFamily: "Helvetica-Bold" }, key);
+    if (node.type === "emphasis") return flowNodes(node.children, context, { ...inherited, fontFamily: "Helvetica-Oblique" }, key);
+    if (node.type === "break") return [<View key={key} style={{ width: "100%" }} />];
+    if (node.type === "inlineToken") {
+      const presentation = node.data?.presentation as { component?: string; keys?: ManualKey[] } | undefined;
+      if (presentation?.component === "key-sequence" && presentation.keys) return [<React.Fragment key={key}>{keyBoxes(presentation.keys, key)}</React.Fragment>];
+      return [<View key={key} style={[base.keyBox, { borderColor: "#59636d", backgroundColor: context.config.theme.navigationBackground }]}><Text style={{ fontFamily: "Helvetica-Bold", fontSize: 7.3, color: "#ffb30f" }}>{node.value}</Text></View>];
+    }
+    if (node.type === "inlineCode") {
+      const presentation = node.data?.presentation as ManualControlSequencePresentation | { component?: string } | undefined;
+      if (presentation?.component === "command-line") return [<View key={key} style={base.commandBox}><Text style={{ fontFamily: "Courier-Bold", fontSize: 7.4, color: "#ffffff" }}>{node.value}</Text></View>];
+      if (presentation?.component === "control-sequence") {
+        const sequence = presentation as ManualControlSequencePresentation;
+        return [<View key={key} style={base.controlBox}>{sequence.segments.map((segment, segmentIndex) => segment.keys
+        ? <React.Fragment key={`${key}-${segmentIndex}`}>{keyBoxes(segment.keys, `${key}-${segmentIndex}`)}</React.Fragment>
+        : <Text key={`${key}-${segmentIndex}`} style={{ fontFamily: "Courier-Bold", fontSize: 7.4, color: "#f4f7f9" }}>{segment.text}</Text>)}</View>];
+      }
+      return [<Text key={key} style={[base.inlineCode, inherited, { color: context.config.theme.accent }]}>{node.value}</Text>];
+    }
+    if (node.type === "link") return [<Link key={key} src={node.url ?? ""} style={{ ...inherited, color: context.config.theme.accent }}>{plain(node)}</Link>];
+    return flowNodes(node.children, context, inherited, key);
+  });
+}
+
+function keyPresentation(node: ManualNode): React.ReactNode | undefined {
+  const presentation = node.data?.presentation as { component?: string; keys?: ManualKey[] } | undefined;
+  return presentation?.component === "key-sequence" && presentation.keys ? renderKeys(presentation.keys) : undefined;
+}
+
+function controlSequence(node: ManualNode): React.ReactNode | undefined {
+  const presentation = node.data?.presentation as ManualControlSequencePresentation | undefined;
+  if (presentation?.component !== "control-sequence") return undefined;
+  return <Text style={base.controlSequence}>{"\u00a0"}{presentation.segments.map((segment, index) => <React.Fragment key={`segment-${index}`}>{segment.keys ? renderKeys(segment.keys) : segment.text}</React.Fragment>)}{"\u00a0"}</Text>;
 }
 
 function inlineNodes(nodes: ManualNode[] | undefined, context: PdfContext): React.ReactNode[] {
@@ -136,7 +208,9 @@ function inlineNodes(nodes: ManualNode[] | undefined, context: PdfContext): Reac
       case "delete": return <Text key={key} style={{ textDecoration: "line-through" }}>{inlineNodes(node.children, context)}</Text>;
       case "inlineCode": {
         const presentation = node.data?.presentation as { component?: string } | undefined;
-        return <Text key={key} style={presentation?.component === "command-line" ? base.commandLine : [base.inlineCode, { color: context.config.theme.accent }]}>{node.value}</Text>;
+        const sequence = controlSequence(node);
+        if (sequence) return <React.Fragment key={key}>{sequence}</React.Fragment>;
+        return <Text key={key} style={presentation?.component === "command-line" ? base.commandLine : [base.inlineCode, { color: context.config.theme.accent }]}>{presentation?.component === "command-line" ? `\u00a0${node.value ?? ""}\u00a0` : node.value}</Text>;
       }
       case "inlineToken": return <React.Fragment key={key}>{keyPresentation(node) ?? <Text style={[base.inlineToken, { backgroundColor: context.config.theme.navigationBackground, color: "#ffb30f" }]}>{node.value}</Text>}</React.Fragment>;
       case "break": return "\n";
@@ -176,7 +250,9 @@ function renderTableCell(cell: ManualNode, context: PdfContext, header: boolean)
   let inline: ManualNode[] = [];
   const flush = (): void => {
     if (!inline.length) return;
-    result.push(<Text key={`cell-text-${result.length}`} style={header ? { color: context.config.theme.navigationInk } : {}}>{inlineNodes(inline, context)}</Text>);
+    result.push(hasPresentation(inline)
+      ? <View key={`cell-text-${result.length}`} style={base.richLine}>{flowNodes(inline, context, header ? { color: context.config.theme.navigationInk } : {})}</View>
+      : <Text key={`cell-text-${result.length}`} style={header ? { color: context.config.theme.navigationInk } : {}}>{inlineNodes(inline, context)}</Text>);
     inline = [];
   };
   const items = (cell.children ?? []).flatMap((child) => child.type === "paragraph" ? child.children ?? [] : [child]);
@@ -195,6 +271,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     case "paragraph": {
       const image = standaloneImage(node);
       if (image) return renderBlock(image, context, `${key}-image`);
+      if (hasPresentation(node.children)) return <View key={key} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
       return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
     }
     case "heading": {
@@ -335,7 +412,10 @@ function estimateNode(node: ManualNode): number {
   const image = standaloneImage(node);
   if (image) return Math.max(8, 28 * imageWidthFraction(image));
   if (node.type === "heading") return Number(node.data?.effectiveDepth ?? node.depth ?? 1) <= 2 ? 6 : 3;
-  if (node.type === "paragraph") return Math.max(1.5, Math.ceil(length / 88) * 1.25);
+  if (node.type === "paragraph") {
+    const ordinary = Math.max(1.5, Math.ceil(length / 88) * 1.25);
+    return hasPresentation(node.children) ? Math.max(ordinary, Math.ceil(length / 70) * 1.6 + presentationCount(node.children) * 0.6) : ordinary;
+  }
   if (node.type === "table") {
     const rowWeight = Number(node.data?.rowWeight ?? 3.7);
     return Math.max(10, (node.children?.length ?? 1) * rowWeight);
@@ -378,6 +458,7 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
       weight += candidateWeight;
       end = unitEnd;
       if (expanded[end - 1]?.type === "table" && expanded[end - 1]?.data?.continueAfterTable !== true) break;
+      if (expanded[end - 1]?.type === "list" && hasPresentation(expanded[end - 1].children) && estimateNode(expanded[end - 1]) > 35) break;
     }
     const nodes = expanded.slice(start, end);
     chunks.push({ page, nodes, headingIndex });
@@ -405,7 +486,7 @@ function splitLongTable(node: ManualNode): ManualNode[] {
 export async function renderPdf(model: ManualModel, config: ResolvedConfig): Promise<void> {
   await mkdir(path.dirname(config.output.pdf), { recursive: true });
   const content = model.pages.flatMap((page) => pageChunks(page, config));
-  const filteredHeadings = model.pages.flatMap((page) => page.headings.filter((heading) => heading.depth <= config.pdf.contentsDepth));
+  const filteredHeadings = model.pages.flatMap((page) => page.headings.filter((heading) => !heading.excludeFromContents && heading.depth <= config.pdf.contentsDepth));
   const tocPageCount = Math.max(1, Math.ceil(filteredHeadings.length / MAX_CONTENTS_ENTRIES_PER_PAGE));
   const contentsEntriesPerPage = Math.max(1, Math.ceil(filteredHeadings.length / tocPageCount));
   const headingPages = new Map<string, number>();

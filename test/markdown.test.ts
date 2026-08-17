@@ -43,13 +43,13 @@ describe("Obsidian Markdown extensions", () => {
     expect(calloutAppearance("done")).toMatchObject({ canonical: "success", background: "#e9f7ed" });
   });
 
-  it("turns configured text and command-code patterns into inline tokens", () => {
+  it("turns configured text patterns into tokens while preserving inline code for hooks", () => {
     const nodes = parseMarkdown("Press [GO], `[STOP]`, then <target>.<br>Continue.", [
       { pattern: "\\[([A-Z]+)\\]", kind: "key" },
       { pattern: "<([a-z]+)>", kind: "placeholder" },
     ]);
     expect(JSON.stringify(nodes)).toContain('"type":"inlineToken","value":"GO"');
-    expect(JSON.stringify(nodes)).toContain('"type":"inlineToken","value":"STOP"');
+    expect(JSON.stringify(nodes)).toContain('"type":"inlineCode","value":"[STOP]"');
     expect(JSON.stringify(nodes)).toContain('"type":"inlineToken","value":"target"');
     expect(JSON.stringify(nodes)).toContain('"type":"html","value":"<br>"');
     expect(JSON.stringify(nodes)).not.toContain('"type":"inlineToken","value":"br"');
@@ -118,5 +118,40 @@ describe("Obsidian Markdown extensions", () => {
 ![System diagram](diagram.png)
 `);
     await expect(loadManual(root)).rejects.toThrow("percentage width cannot exceed 100%");
+  });
+
+  it("excludes Markdown-selected headings from generated contents", async () => {
+    const root = await mkdtemp(path.join(os.tmpdir(), "manual-contents-directive-"));
+    await writeFile(path.join(root, "index.md"), `# Appendix
+
+<!-- toc: exclude -->
+## Hidden heading
+
+Text.
+
+## Visible heading
+
+Text.
+`);
+    let model = await loadManual(root);
+    expect(model.pages[0].headings.map((heading) => [heading.title, heading.excludeFromContents])).toEqual([
+      ["Appendix", false],
+      ["Hidden heading", true],
+      ["Visible heading", false],
+    ]);
+
+    await writeFile(path.join(root, "index.md"), `# Catalogue
+
+<!-- toc: exclude-headings -->
+
+## Lamps
+
+Text.
+`);
+    model = await loadManual(root);
+    expect(model.pages[0].headings.map((heading) => [heading.title, heading.excludeFromContents])).toEqual([
+      ["Catalogue", false],
+      ["Lamps", true],
+    ]);
   });
 });

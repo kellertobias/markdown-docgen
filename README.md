@@ -150,6 +150,14 @@ export default {
 The built-in `key-sequence` presentation supports `regular`, `record`, `clear`, `preload`,
 `keyboard`, and `shift` variants. Keys accept the vector-backed `shift` and `backspace` icons.
 Use the `command-line` presentation on an `inlineCode` node to render a desk command-line readout.
+Use `control-sequence` with ordered `{ text }` and `{ keys }` segments to place padded keys inside
+one dark inline command strip.
+
+## Contents directives
+
+Keep an individual heading out of generated contents by putting `<!-- toc: exclude -->` directly
+before it. Put `<!-- toc: exclude-headings -->` anywhere on a page to retain the page title while
+excluding every lower-level heading on that page. Both directives are removed from HTML and PDF.
 
 ## Table directives
 
