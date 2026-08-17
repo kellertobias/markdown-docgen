@@ -1,6 +1,6 @@
 {
   "name": "@tobisk/markdown-manuals",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "Render a folder of Obsidian-flavored Markdown as an offline HTML manual and PDF.",
   "keywords": [
     "markdown",

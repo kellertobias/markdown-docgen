@@ -1,3 +1,7 @@
+## <small>1.0.4 (2026-08-17)</small>
+
+* fix: fill PDF contents pages vertically ([d790e28](https://git.tokenet.de/opensource/md-docs-gen/commit/d790e28))
+
 ## <small>1.0.3 (2026-08-17)</small>
 
 * fix: render standalone images in PDF paragraphs ([39a46fe](https://git.tokenet.de/opensource/md-docs-gen/commit/39a46fe))
