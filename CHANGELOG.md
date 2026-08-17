@@ -1,3 +1,7 @@
+## <small>1.0.2 (2026-08-17)</small>
+
+* fix: render Obsidian callouts and Markdown breaks ([4987597](https://git.tokenet.de/opensource/md-docs-gen/commit/4987597))
+
 ## <small>1.0.1 (2026-08-17)</small>
 
 * fix: restrict environment placeholder expansion ([6e0d350](https://git.tokenet.de/opensource/md-docs-gen/commit/6e0d350))
