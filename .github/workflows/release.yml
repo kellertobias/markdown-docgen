@@ -37,4 +37,4 @@ jobs:
         with:
           generate_release_notes: true
           body: |
-            Published to npm: https://www.npmjs.com/package/@tosklight/markdown-manual-renderer/v/${{ steps.version.outputs.version }}
+            Published to npm: https://www.npmjs.com/package/@tobisk/markdown-manuals/v/${{ steps.version.outputs.version }}

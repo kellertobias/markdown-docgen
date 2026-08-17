@@ -247,7 +247,7 @@ function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; mod
 }
 
 function ManualDocument({ model, config, content, toc }: { model: ManualModel; config: ResolvedConfig; content: ContentChunk[]; toc: TocEntry[][] }): React.ReactElement {
-  return <Document title={config.title} author={config.author} subject={config.description ?? config.subtitle} creator="markdown-manual" producer="@tosklight/markdown-manual-renderer" language={config.language ?? "en"} keywords={`manual, ${config.title}`}>
+  return <Document title={config.title} author={config.author} subject={config.description ?? config.subtitle} creator="markdown-manual" producer="@tobisk/markdown-manuals" language={config.language ?? "en"} keywords={`manual, ${config.title}`}>
     <Page size={config.pdf.pageSize} wrap={false} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]} bookmark={config.title}>
       <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} />
       <View style={{ flexGrow: 1, justifyContent: "center" }}>

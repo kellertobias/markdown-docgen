@@ -1,6 +1,6 @@
 # Markdown Manual Renderer
 
-`@tosklight/markdown-manual-renderer` turns a numbered folder of CommonMark, GFM, and
+`@tobisk/markdown-manuals` turns a numbered folder of CommonMark, GFM, and
 Obsidian-flavored Markdown into two outputs from one parsed document model:
 
 - a searchable, responsive, self-contained offline HTML manual and deterministic ZIP; and
@@ -34,7 +34,7 @@ custom render hook.
 ## CLI
 
 ```sh
-npx --package @tosklight/markdown-manual-renderer markdown-manual build \
+npx --package @tobisk/markdown-manuals markdown-manual build \
   --source docs/help \
   --config docs/help/manual.json \
   --html-dir .artifacts/manual/html \
@@ -199,7 +199,7 @@ Forgejo is authoritative for `main`, release commits, and `vX.Y.Z` tags. Its con
 delivers those commits and tags to GitHub. Forgejo CI runs semantic-release after typecheck, tests,
 build, and package inspection; it updates `package.json`, `package-lock.json`, and `CHANGELOG.md`,
 then creates the release commit and tag. GitHub Actions rebuilds a mirrored tag, publishes
-`@tosklight/markdown-manual-renderer` through npm trusted publishing, and creates the GitHub Release.
+`@tobisk/markdown-manuals` through npm trusted publishing, and creates the GitHub Release.
 No npm token is stored in the repository.
 
 Conventional Commits control releases: `fix:` and `perf:` create a patch, `feat:` creates a minor,
@@ -212,5 +212,5 @@ to read it.
 Publishing requires two repository-side settings:
 
 - Forgejo secret `SEMANTIC_RELEASE_TOKEN`, scoped to push the release commit and tags.
-- An npm trusted publisher for package `@tosklight/markdown-manual-renderer`, GitHub repository
-  `kellertobias/md-docs-gen`, workflow `.github/workflows/release.yml`.
+- An npm trusted publisher for package `@tobisk/markdown-manuals`, GitHub repository
+  `kellertobias/md-docs-gen`, workflow `release.yml`.
