@@ -237,8 +237,8 @@ function Contents({ chunks, config }: { chunks: TocEntry[][]; config: ResolvedCo
         <Text style={{ fontFamily: "Helvetica-Bold", fontSize: 8, color: config.theme.accent, letterSpacing: 1.8 }}>NAVIGATION</Text>
         <Text style={[base.h1, { marginTop: 5, color: config.theme.navigationBackground }]}>{chunkIndex === 0 ? "Contents" : "Contents continued"}</Text>
       </View>
-      <View style={{ flexDirection: "row" }}>
-        {columns.map((column, columnIndex) => <View key={`column-${columnIndex}`} style={{ width: "50%", paddingRight: columnIndex === 0 ? 11 : 0, paddingLeft: columnIndex === 1 ? 11 : 0 }}>
+      <View style={{ flexDirection: "row", flexGrow: 1, alignItems: "stretch" }}>
+        {columns.map((column, columnIndex) => <View key={`column-${columnIndex}`} style={{ width: "50%", height: "100%", justifyContent: "space-between", paddingRight: columnIndex === 0 ? 11 : 0, paddingLeft: columnIndex === 1 ? 11 : 0 }}>
           {column.map((entry) => <View
             key={entry.id}
             style={[
