@@ -213,4 +213,4 @@ Publishing requires two repository-side settings:
 
 - Forgejo secret `SEMANTIC_RELEASE_TOKEN`, scoped to push the release commit and tags.
 - An npm trusted publisher for package `@tobisk/markdown-manuals`, GitHub repository
-  `kellertobias/md-docs-gen`, workflow `release.yml`.
+  `kellertobias/markdown-docgen`, workflow `release.yml`.

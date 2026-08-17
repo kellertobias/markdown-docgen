@@ -15,13 +15,13 @@
     "name": "Tobias S. Keller",
     "url": "https://tobisk.de"
   },
-  "homepage": "https://github.com/kellertobias/md-docs-gen#readme",
+  "homepage": "https://github.com/kellertobias/markdown-docgen#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/kellertobias/md-docs-gen.git"
+    "url": "git+https://github.com/kellertobias/markdown-docgen.git"
   },
   "bugs": {
-    "url": "https://github.com/kellertobias/md-docs-gen/issues"
+    "url": "https://github.com/kellertobias/markdown-docgen/issues"
   },
   "publishConfig": {
     "access": "public",
