@@ -150,7 +150,7 @@ function keyBoxes(keys: ManualKey[], prefix: string): React.ReactNode {
     const key = keys[index];
     if (groups.length) groups.push(<Text key={`${prefix}-plus-${index}`} style={{ marginHorizontal: 1.4, color: "#64748b", fontSize: 6.8 }}>+</Text>);
     if (key.variant === "shift" && keys[index + 1]) {
-      groups.push(<View key={`${prefix}-shift-chord-${index}`} style={base.shiftChord}>{box(key, index, { top: 1.5, paddingHorizontal: 1.75, paddingVertical: 0.9 })}{box(keys[index + 1], index + 1, { marginLeft: -2.5, top: -1 })}</View>);
+      groups.push(<View key={`${prefix}-shift-chord-${index}`} style={base.shiftChord}>{box(key, index, { top: 0.6, paddingHorizontal: 1.75, paddingVertical: 0.45 })}{box(keys[index + 1], index + 1, { marginLeft: -2.5, top: -1 })}</View>);
       index += 1;
     } else groups.push(box(key, index));
   }
