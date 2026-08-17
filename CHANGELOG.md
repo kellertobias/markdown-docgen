@@ -1,3 +1,7 @@
+## <small>1.3.1 (2026-08-17)</small>
+
+* fix: refine control rendering and table pagination ([9e7fd3c](https://git.tokenet.de/opensource/md-docs-gen/commit/9e7fd3c))
+
 ## 1.3.0 (2026-08-17)
 
 * feat: improve control rendering and contents directives ([aa0bd87](https://git.tokenet.de/opensource/md-docs-gen/commit/aa0bd87))
