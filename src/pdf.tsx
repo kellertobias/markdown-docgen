@@ -20,6 +20,7 @@ import { resolvePageLink } from "./markdown.js";
 import { tableColumnWidths } from "./tables.js";
 import { calloutAppearance } from "./callouts.js";
 import { imageDisplayWidth, imageWidthFraction } from "./images.js";
+import { measureBlocks } from "./pdf-measurement.js";
 
 const require = createRequire(import.meta.url);
 Font.register({
@@ -88,6 +89,8 @@ interface PdfContext {
   headingIndex: number;
   listDepth: number;
   flow: boolean;
+  oversized?: ReadonlySet<ManualNode>;
+  tableStarts?: ReadonlyMap<ManualNode, number>;
 }
 
 function pageFrame(config: ResolvedConfig): { width: number; height: number; minHeight: number; maxHeight: number } {
@@ -112,8 +115,6 @@ function presenceAhead(node: ManualNode, context: PdfContext): number | undefine
   const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
   if (node.type === "heading") return depth <= 2 ? 90 : depth === 3 ? 64 : 24;
   if (node.type === "callout" || node.type === "blockquote") return 34;
-  if (node.type === "table") return 44;
-  if (node.type === "list") return 26;
   return undefined;
 }
 
@@ -193,7 +194,7 @@ function flowText(value: string, style: any, prefix: string): React.ReactNode[] 
 }
 
 function flowNodes(nodes: ManualNode[] | undefined, context: PdfContext, inherited: any = {}, prefix = "flow"): React.ReactNode[] {
-  return (nodes ?? []).flatMap((node, index) => {
+  return (nodes ?? []).flatMap<React.ReactNode>((node, index) => {
     const key = `${prefix}-${node.type}-${index}`;
     if (node.type === "text") return flowText(node.value ?? "", inherited, key);
     if (node.type === "strong") return flowNodes(node.children, context, { ...inherited, fontFamily: "Helvetica-Bold" }, key);
@@ -270,13 +271,37 @@ function blockNodes(nodes: ManualNode[] | undefined, context: PdfContext): React
 
 function renderListItem(node: ManualNode, context: PdfContext, key: string, index: number, ordered: boolean, start: number): React.ReactNode {
   const marker = node.checked === true ? "[x]" : node.checked === false ? "[ ]" : ordered ? `${start + index}.` : "•";
-  return <View key={key} style={base.listItem} wrap={false}><Text style={base.bullet}>{marker}</Text><View style={base.listContent}>{blockNodes(node.children, { ...context, listDepth: context.listDepth + 1 })}</View></View>;
+  return <View key={key} style={base.listItem} wrap={Boolean(context.flow && context.oversized?.has(node))}><Text style={base.bullet}>{marker}</Text><View style={base.listContent}>{blockNodes(node.children, { ...context, listDepth: context.listDepth + 1 })}</View></View>;
+}
+
+function renderTableRow(row: ManualNode, widths: number[], context: PdfContext, rowIndex: number): React.ReactNode {
+  return <View
+    key={`row-${rowIndex}`}
+    {...(context.flow && rowIndex === 0 ? { fixed: true } : {})}
+    wrap={Boolean(context.flow && context.oversized?.has(row))}
+    style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]}
+  >
+    {(row.children ?? []).map((cell, cellIndex, cells) => <View
+      key={`cell-${cellIndex}`}
+      style={[base.cell, rowIndex === 0 ? base.headerCell : {}, {
+        width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`,
+        flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`,
+        borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5,
+        borderColor: "#cbd5df",
+      }]}
+    >{renderTableCell(cell, context, rowIndex === 0)}</View>)}
+  </View>;
 }
 
 function renderTable(node: ManualNode, context: PdfContext, key: string): React.ReactNode {
   const widths = tableColumnWidths(node);
   const continuation = Number(node.data?.tablePart ?? 0) > 0;
-  return <View key={key} break={context.flow && continuation} minPresenceAhead={presenceAhead(node, context)} style={[base.table, continuation && !context.flow ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>{(node.children ?? []).map((row, rowIndex) => <View key={`row-${rowIndex}`} style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]} wrap={false}>{(row.children ?? []).map((cell, cellIndex, cells) => <View key={`cell-${cellIndex}`} style={[base.cell, rowIndex === 0 ? base.headerCell : {}, { width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5, borderColor: "#cbd5df" }]}>{renderTableCell(cell, context, rowIndex === 0)}</View>)}</View>)}</View>;
+  return <React.Fragment key={key}>
+    {context.flow ? <View style={{ height: 0 }} minPresenceAhead={context.tableStarts?.get(node)} /> : null}
+    <View style={[base.table, continuation && !context.flow ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>
+      {(node.children ?? []).map((row, index) => renderTableRow(row, widths, context, index))}
+    </View>
+  </React.Fragment>;
 }
 
 function renderTableCell(cell: ManualNode, context: PdfContext, header: boolean): React.ReactNode[] {
@@ -307,7 +332,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
       if (image) return renderBlock(image, context, `${key}-image`);
       // Key sequences sit in a wrapped flex row, which React-PDF cannot split cleanly across a page
       // boundary - the remainder ends up under the bottom margin - so such a paragraph stays whole.
-      if (hasPresentation(node.children)) return <View key={key} wrap={false} minPresenceAhead={context.flow ? 24 : undefined} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
+      if (hasPresentation(node.children)) return <View key={key} wrap={false} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
       return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
     }
     case "heading": {
@@ -332,7 +357,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     }
     case "list": {
       const start = node.start ?? 1;
-      return <View key={key} minPresenceAhead={presenceAhead(node, context)} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
+      return <View key={key} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
     }
     case "table": return renderTable(node, context, key);
     case "image":
@@ -416,8 +441,8 @@ function PageAnchor({ id }: { id: string }): React.ReactElement {
   return <View id={id} style={{ height: 0 }} />;
 }
 
-function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; model: ManualModel; config: ResolvedConfig; index: number }): React.ReactElement {
-  const context: PdfContext = { model, page: chunk.page, config, headingIndex: chunk.headingIndex, listDepth: 0, flow: Boolean(chunk.flow) };
+function ContentPage({ chunk, model, config, index, blockLayout }: { chunk: ContentChunk; model: ManualModel; config: ResolvedConfig; index: number; blockLayout: BlockLayout }): React.ReactElement {
+  const context: PdfContext = { model, page: chunk.page, config, headingIndex: chunk.headingIndex, listDepth: 0, flow: Boolean(chunk.flow), oversized: blockLayout.oversized, tableStarts: blockLayout.tableStarts };
   const anchor = chunkAnchor(chunk, index);
   if (chunk.divider) {
     const headingNode = chunk.nodes.find((node) => node.type === "heading")!;
@@ -454,7 +479,7 @@ function ContentPage({ chunk, model, config, index }: { chunk: ContentChunk; mod
   return <Page key={`${chunk.page.id}-${index}`} size={config.pdf.pageSize} wrap={false} bookmark={chunk.headingIndex === 0 ? chunk.page.title : undefined} style={[base.page, pageFrame(config), padding]}><PageAnchor id={anchor} />{spansColumns ? renderBlock(first, context, "spanning-heading") : null}<View style={[base.body, config.layout.columns === 2 ? { flexDirection: "row" } : {}]}>{columns.map((nodes, columnIndex) => <View key={`column-${columnIndex}`} style={config.layout.columns === 2 ? { width: "50%", paddingRight: columnIndex === 0 ? config.layout.columnGap / 2 : 0, paddingLeft: columnIndex === 1 ? config.layout.columnGap / 2 : 0 } : { width: "100%" }}>{blockNodes(nodes, context)}</View>)}</View></Page>;
 }
 
-function ManualDocument({ model, config, content, toc }: { model: ManualModel; config: ResolvedConfig; content: ContentChunk[]; toc: TocEntry[][] }): React.ReactElement<DocumentProps> {
+function ManualDocument({ model, config, content, toc, blockLayout }: { model: ManualModel; config: ResolvedConfig; content: ContentChunk[]; toc: TocEntry[][]; blockLayout: BlockLayout }): React.ReactElement<DocumentProps> {
   return <Document title={config.title} author={config.author} subject={config.description ?? config.subtitle} creator="markdown-manual" producer="@tobisk/markdown-manuals" language={config.language ?? "en"} keywords={`manual, ${config.title}`}>
     <Page size={config.pdf.pageSize} wrap={false} style={[base.page, pageFrame(config), { padding: 58, backgroundColor: config.theme.navigationBackground, color: config.theme.navigationInk }]} bookmark={config.title}>
       <View style={{ position: "absolute", left: 0, top: 0, bottom: 0, width: 12, backgroundColor: config.theme.accent }} />
@@ -469,7 +494,7 @@ function ManualDocument({ model, config, content, toc }: { model: ManualModel; c
       <View style={{ paddingTop: 12, borderTopWidth: 1, borderColor: "#ffffff33" }}><Text style={{ color: "#94a3b8", fontSize: 7.5 }}>{config.author ?? ""}</Text></View>
     </Page>
     <Contents chunks={toc} config={config} />
-    {content.map((chunk, index) => <ContentPage key={`${chunk.page.id}-${index}`} chunk={chunk} model={model} config={config} index={index} />)}
+    {content.map((chunk, index) => <ContentPage key={`${chunk.page.id}-${index}`} chunk={chunk} model={model} config={config} index={index} blockLayout={blockLayout} />)}
   </Document>;
 }
 
@@ -508,7 +533,7 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
     headingIndex = 1;
   }
   if (flowsContent(config)) {
-    chunks.push({ page, nodes: sourceNodes.flatMap(splitLongTable), headingIndex, flow: true });
+    chunks.push({ page, nodes: sourceNodes, headingIndex, flow: true });
     return chunks;
   }
   const expanded = sourceNodes.flatMap(splitLongTable);
@@ -554,8 +579,57 @@ function splitLongTable(node: ManualNode): ManualNode[] {
   return tables;
 }
 
+// Ordinary items and rows stay whole. Measure their actual layout so only a block that cannot
+// fit on a fresh page is allowed to split; this also covers nested lists and tall table cells.
+interface BlockLayout {
+  oversized: ReadonlySet<ManualNode>;
+  tableStarts: ReadonlyMap<ManualNode, number>;
+}
+
+async function measureBlockLayout(model: ManualModel, config: ResolvedConfig): Promise<BlockLayout> {
+  if (!flowsContent(config)) return { oversized: new Set(), tableStarts: new Map() };
+  const pageHeight = config.pdf.pageSize === "A4" ? 841.89 : 792;
+  const contentHeight = pageHeight - config.pdf.margins.top - config.pdf.margins.bottom;
+  const contentWidth = (config.pdf.pageSize === "A4" ? 595.28 : 612) - config.pdf.margins.left - config.pdf.margins.right;
+  const tables: ManualNode[] = [];
+  const samples: Array<{ node: ManualNode; width: number; content: React.ReactNode; header?: ManualNode }> = [];
+  const visit = (nodes: ManualNode[], context: PdfContext, width: number): void => {
+    for (const node of nodes) {
+      if (node.type === "list") {
+        const listWidth = width - 11;
+        (node.children ?? []).forEach((item, index) => {
+          samples.push({ node: item, width: listWidth, content: renderListItem(item, context, `measure-${samples.length}`, index, Boolean(node.ordered), node.start ?? 1) });
+          visit(item.children ?? [], { ...context, listDepth: context.listDepth + 1 }, listWidth - 16);
+        });
+      } else if (node.type === "table") {
+        tables.push(node);
+        const widths = tableColumnWidths(node);
+        (node.children ?? []).forEach((row, index) => samples.push({
+          node: row, width, header: index ? node.children?.[0] : undefined,
+          content: renderTableRow(row, widths, context, index),
+        }));
+      } else if (node.children) {
+        visit(node.children, context, width - (["callout", "blockquote"].includes(node.type) ? 22 : 0));
+      }
+    }
+  };
+  for (const page of model.pages) visit(page.nodes, { model, config, page, headingIndex: 0, listDepth: 0, flow: false }, contentWidth);
+  const heights = await measureBlocks(samples, pageHeight);
+  const measured = new Map(samples.map((sample, index) => [sample.node, heights[index]]));
+  const oversized = new Set(samples.filter((sample, index) => heights[index] > contentHeight - (sample.header ? (measured.get(sample.header) ?? 0) + 13 : 0)).map((sample) => sample.node));
+  const tableStarts = new Map(tables.map((table) => {
+    const [header, first] = table.children ?? [];
+    const headerHeight = measured.get(header) ?? 0;
+    const firstHeight = measured.get(first) ?? 0;
+    const firstPresence = oversized.has(first) ? Math.min(32, firstHeight) : firstHeight;
+    return [table, headerHeight + firstPresence + 6.5] as const;
+  }));
+  return { oversized, tableStarts };
+}
+
 export async function renderPdf(model: ManualModel, config: ResolvedConfig): Promise<void> {
   await mkdir(path.dirname(config.output.pdf), { recursive: true });
+  const blockLayout = await measureBlockLayout(model, config);
   const content = model.pages.flatMap((page) => pageChunks(page, config));
   const filteredHeadings = model.pages.flatMap((page) => page.headings.filter((heading) => !heading.excludeFromContents && heading.depth <= config.pdf.contentsDepth));
   const tocPageCount = Math.max(1, Math.ceil(filteredHeadings.length / MAX_CONTENTS_ENTRIES_PER_PAGE));
@@ -565,7 +639,7 @@ export async function renderPdf(model: ManualModel, config: ResolvedConfig): Pro
     const toc: TocEntry[][] = [];
     for (let index = 0; index < tocEntries.length; index += contentsEntriesPerPage) toc.push(tocEntries.slice(index, index + contentsEntriesPerPage));
     if (!toc.length) toc.push([]);
-    return <ManualDocument model={model} config={config} content={content} toc={toc} />;
+    return <ManualDocument model={model} config={config} content={content} toc={toc} blockLayout={blockLayout} />;
   };
 
   // Flowing pages are paginated by React-PDF, so contents page numbers can only be read back from a

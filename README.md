@@ -114,15 +114,16 @@ are JavaScript regular-expression sources and must not match an empty string.
 `layout.columns` accepts `1` or `2`. In two-column mode, major headings, tables, figures, code,
 and callouts span both columns.
 
-Single-column PDFs are paginated by React-PDF: each Markdown page is one flowing PDF page that breaks
-wherever the content actually runs out of room, so a section only moves to the next page when it no
-longer fits. Headings, key-sequence paragraphs, list items, figures and table rows stay whole, and a
-heading that would be stranded at the foot of a page moves down with its text. Because the page breaks
-are only known once the document is laid out, the contents page numbers are read back from a first
-rendering pass and written in a second one. Two-column PDFs cannot flow side-by-side columns, so they
-keep the estimated fixed-page pagination and place one Markdown chunk per PDF page. With `hierarchyHeadings` enabled, a folder index keeps the folder's
-heading level, an ordinary file is one level deeper, and nested folders deepen the hierarchy even
-when they have no index. `maxHeadingDepth` caps the effective level.
+Single-column PDFs flow through the available page space. Lists start on the current page and
+continue when necessary. Ordinary items and table rows stay together; the renderer measures their
+height and allows a block taller than a page to continue. Tables use available space and repeat
+their header on each continuation page.
+Headings stay with following content; figures and paragraphs with rendered key sequences stay whole.
+
+The renderer reads heading destinations from the laid-out PDF to generate the contents page numbers
+and running headers. Two-column PDFs use estimated fixed-page pagination. With `hierarchyHeadings`
+enabled, a folder index keeps the folder's heading level, an ordinary file is one level deeper, and
+nested folders deepen the hierarchy even when they have no index. `maxHeadingDepth` caps the effective level.
 
 Every top-level folder index becomes a dedicated section-divider page in PDF and a full-height
 divider in HTML. If a standalone image is immediately before or after that index's H1, the image
@@ -179,11 +180,12 @@ render hook. Put a directive immediately before the table:
 ```
 
 `columns` contains positive relative widths and must have exactly one value per table column.
-`rows-per-page` and `row-weight` tune unusually long PDF tables: a table longer than the row budget
-is cut into parts that each repeat the header row and start a new PDF page, so raise `rows-per-page`
-when a long table is leaving space unused. A table that fits inside the budget flows with the text
-around it. `row-weight` and `continue-after-table` only affect the estimated two-column pagination,
-where `continue-after-table` permits following content to share the same generated PDF page. Unknown options, invalid numbers, column
+Single-column PDFs use natural row wrapping and repeat headers at physical page breaks; the
+row-count settings do not force breaks in that layout.
+
+`rows-per-page`, `row-weight`, and `continue-after-table` tune the estimated two-column pagination.
+Tables longer than the row budget are cut into parts with repeated headers. `continue-after-table`
+permits following content to share the generated page. Unknown options, invalid numbers, column
 count mismatches, and directives that are not directly followed by a table fail the build.
 
 ## Image directives
