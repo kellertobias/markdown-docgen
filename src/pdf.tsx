@@ -112,8 +112,6 @@ function presenceAhead(node: ManualNode, context: PdfContext): number | undefine
   const depth = Number(node.data?.effectiveDepth ?? node.depth ?? 1);
   if (node.type === "heading") return depth <= 2 ? 90 : depth === 3 ? 64 : 24;
   if (node.type === "callout" || node.type === "blockquote") return 34;
-  if (node.type === "table") return 44;
-  if (node.type === "list") return 26;
   return undefined;
 }
 
@@ -270,13 +268,32 @@ function blockNodes(nodes: ManualNode[] | undefined, context: PdfContext): React
 
 function renderListItem(node: ManualNode, context: PdfContext, key: string, index: number, ordered: boolean, start: number): React.ReactNode {
   const marker = node.checked === true ? "[x]" : node.checked === false ? "[ ]" : ordered ? `${start + index}.` : "•";
-  return <View key={key} style={base.listItem} wrap={false}><Text style={base.bullet}>{marker}</Text><View style={base.listContent}>{blockNodes(node.children, { ...context, listDepth: context.listDepth + 1 })}</View></View>;
+  return <View key={key} style={base.listItem} wrap={context.flow}><Text style={base.bullet}>{marker}</Text><View style={base.listContent}>{blockNodes(node.children, { ...context, listDepth: context.listDepth + 1 })}</View></View>;
 }
 
 function renderTable(node: ManualNode, context: PdfContext, key: string): React.ReactNode {
   const widths = tableColumnWidths(node);
   const continuation = Number(node.data?.tablePart ?? 0) > 0;
-  return <View key={key} break={context.flow && continuation} minPresenceAhead={presenceAhead(node, context)} style={[base.table, continuation && !context.flow ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>{(node.children ?? []).map((row, rowIndex) => <View key={`row-${rowIndex}`} style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]} wrap={false}>{(row.children ?? []).map((cell, cellIndex, cells) => <View key={`cell-${cellIndex}`} style={[base.cell, rowIndex === 0 ? base.headerCell : {}, { width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`, borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5, borderColor: "#cbd5df" }]}>{renderTableCell(cell, context, rowIndex === 0)}</View>)}</View>)}</View>;
+  return <View key={key} style={[base.table, continuation && !context.flow ? { marginTop: 0 } : {}, { borderColor: "#cbd5df" }]}>
+    {/* Reserve the header and the start of a row, without keeping the entire table together. */}
+    {context.flow ? <View style={{ height: 0 }} minPresenceAhead={44} /> : null}
+    {(node.children ?? []).map((row, rowIndex) => <View
+      key={`row-${rowIndex}`}
+      fixed={context.flow && rowIndex === 0}
+      wrap={context.flow && rowIndex > 0}
+      style={[base.row, rowIndex === 0 ? { backgroundColor: context.config.theme.navigationBackground } : rowIndex % 2 === 0 ? { backgroundColor: "#f2f5f6" } : { backgroundColor: "#ffffff" }]}
+    >
+      {(row.children ?? []).map((cell, cellIndex, cells) => <View
+        key={`cell-${cellIndex}`}
+        style={[base.cell, rowIndex === 0 ? base.headerCell : {}, {
+          width: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`,
+          flexBasis: `${(widths[cellIndex] ?? 1 / cells.length) * 100}%`,
+          borderRightWidth: cellIndex === cells.length - 1 ? 0 : 0.5,
+          borderColor: "#cbd5df",
+        }]}
+      >{renderTableCell(cell, context, rowIndex === 0)}</View>)}
+    </View>)}
+  </View>;
 }
 
 function renderTableCell(cell: ManualNode, context: PdfContext, header: boolean): React.ReactNode[] {
@@ -307,7 +324,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
       if (image) return renderBlock(image, context, `${key}-image`);
       // Key sequences sit in a wrapped flex row, which React-PDF cannot split cleanly across a page
       // boundary - the remainder ends up under the bottom margin - so such a paragraph stays whole.
-      if (hasPresentation(node.children)) return <View key={key} wrap={false} minPresenceAhead={context.flow ? 24 : undefined} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
+      if (hasPresentation(node.children)) return <View key={key} wrap={false} style={[base.paragraph, base.richLine, context.listDepth ? { marginBottom: 4 } : {}]}>{flowNodes(node.children, context)}</View>;
       return <Text key={key} style={[base.paragraph, context.listDepth ? { marginBottom: 1 } : {}, { color: context.config.theme.ink, textAlign: context.config.layout.justifyText ? "justify" : "left" }]}>{inlineNodes(node.children, context)}</Text>;
     }
     case "heading": {
@@ -332,7 +349,7 @@ function renderBlock(node: ManualNode, context: PdfContext, key: string): React.
     }
     case "list": {
       const start = node.start ?? 1;
-      return <View key={key} minPresenceAhead={presenceAhead(node, context)} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
+      return <View key={key} style={base.list}>{(node.children ?? []).map((item, index) => renderListItem(item, context, `${key}-${index}`, index, Boolean(node.ordered), start))}</View>;
     }
     case "table": return renderTable(node, context, key);
     case "image":
@@ -508,7 +525,7 @@ function pageChunks(page: SourcePage, config: ResolvedConfig): ContentChunk[] {
     headingIndex = 1;
   }
   if (flowsContent(config)) {
-    chunks.push({ page, nodes: sourceNodes.flatMap(splitLongTable), headingIndex, flow: true });
+    chunks.push({ page, nodes: sourceNodes, headingIndex, flow: true });
     return chunks;
   }
   const expanded = sourceNodes.flatMap(splitLongTable);

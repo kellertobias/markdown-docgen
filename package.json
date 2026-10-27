@@ -86,6 +86,7 @@
     "@types/node": "^22.15.30",
     "@types/react": "^19.1.8",
     "conventional-changelog-conventionalcommits": "^7.0.2",
+    "pdfjs-dist": "^5.7.284",
     "semantic-release": "^25.0.9",
     "typescript": "^5.8.3",
     "vitest": "^4.0.0"
