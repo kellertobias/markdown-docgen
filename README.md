@@ -115,8 +115,9 @@ are JavaScript regular-expression sources and must not match an empty string.
 and callouts span both columns.
 
 Single-column PDFs flow through the available page space. Lists start on the current page and
-continue when necessary, including long items and nested lists. Tables flow by their rendered row
-heights and repeat their header on each continuation page. A tall row can continue across pages.
+continue when necessary. Ordinary items and table rows stay together; the renderer measures their
+height and allows a block taller than a page to continue. Tables use available space and repeat
+their header on each continuation page.
 Headings stay with following content; figures and paragraphs with rendered key sequences stay whole.
 
 The renderer reads heading destinations from the laid-out PDF to generate the contents page numbers

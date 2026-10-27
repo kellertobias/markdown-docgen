@@ -192,6 +192,50 @@ describe("physical PDF pagination", () => {
     insideContent(manual, [...printedRows, after, ...positions(manual, "ROW_HEADER"), ...positions(manual, "DETAIL_HEADER")]);
   }, 40_000);
 
+  it("keeps each ordinary multi-line table row together at a physical page boundary", async () => {
+    const count = 17;
+    const rows = Array.from({ length: count }, (_, index) => {
+      const number = String(index + 1).padStart(2, "0");
+      const detail = [
+        "Inspect the recorded timing.",
+        ...Array.from({ length: 1 + index % 3 }, () => "Keep the selected fixture active."),
+        `ROW_END_${number}`,
+      ].join("<br>");
+      return `| ROW_BEGIN_${number} | ${detail} |`;
+    });
+    const manual = await print(`${filler(4)}\n\n${table(rows)}\n\nAFTER_WHOLE_ROWS`);
+    const starts = Array.from({ length: count }, (_, index) => once(manual, `ROW_BEGIN_${String(index + 1).padStart(2, "0")}`));
+    const ends = Array.from({ length: count }, (_, index) => once(manual, `ROW_END_${String(index + 1).padStart(2, "0")}`));
+    expect(new Set(starts.map((item) => item.page)).size).toBeGreaterThan(1);
+    for (let index = 0; index < count; index += 1) {
+      expect(ends[index].page, `Table row ${index + 1} must keep its label with its last cell line`).toBe(starts[index].page);
+      expect(ends[index].y).toBeLessThan(starts[index].y);
+    }
+    for (const page of new Set(starts.map((item) => item.page))) {
+      expect(positions(manual, "ROW_HEADER").filter((item) => item.page === page)).toHaveLength(1);
+      expect(positions(manual, "DETAIL_HEADER").filter((item) => item.page === page)).toHaveLength(1);
+    }
+    insideContent(manual, [...starts, ...ends, once(manual, "AFTER_WHOLE_ROWS")]);
+  }, 40_000);
+
+  it("keeps an ordinary multi-line list item together while continuing the list", async () => {
+    const count = 16;
+    const items = Array.from({ length: count }, (_, index) => {
+      const number = String(index + 1).padStart(2, "0");
+      return `${index + 1}. ITEM_BEGIN_${number}  \n    Keep the selected fixture active.  \n    Inspect the cue's timing.  \n    ITEM_FINISH_${number}`;
+    });
+    const manual = await print(`${filler(3)}\n\n${items.join("\n")}\n\nAFTER_WHOLE_ITEMS`);
+    const starts = Array.from({ length: count }, (_, index) => once(manual, `ITEM_BEGIN_${String(index + 1).padStart(2, "0")}`));
+    const ends = Array.from({ length: count }, (_, index) => once(manual, `ITEM_FINISH_${String(index + 1).padStart(2, "0")}`));
+    expect(starts[0].page).toBe(once(manual, "FILLER_03").page);
+    expect(starts.at(-1)!.page).toBeGreaterThan(starts[0].page);
+    for (let index = 0; index < count; index += 1) {
+      expect(ends[index].page, `List item ${index + 1} must keep its first and last lines together`).toBe(starts[index].page);
+      expect(ends[index].y).toBeLessThan(starts[index].y);
+    }
+    insideContent(manual, [...starts, ...ends, once(manual, "AFTER_WHOLE_ITEMS")]);
+  }, 40_000);
+
   it("continues an oversized table row without clipping or dropping its cell content", async () => {
     const tokens = Array.from({ length: 65 }, (_, index) => `TALL_${String(index + 1).padStart(2, "0")}`);
     const manual = await print(`${filler(2)}\n\n${table([`| TALL_ROW | ${tokens.join("<br>")} |`])}\n\nAFTER_TALL_ROW`);
