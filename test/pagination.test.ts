@@ -236,6 +236,24 @@ describe("physical PDF pagination", () => {
     insideContent(manual, [...starts, ...ends, once(manual, "AFTER_WHOLE_ITEMS")]);
   }, 40_000);
 
+  it("keeps a tall table header with its first row instead of stranding it on the preceding page", async () => {
+    const header = [
+      "TALL_HEADER_START", "Header line two", "Header line three", "Header line four",
+      "Header line five", "Header line six", "Header line seven", "TALL_HEADER_END",
+    ].join("<br>");
+    const markdown = `| ${header} | Detail |\n| --- | --- |\n| FIRST_ROW_START | Detail one<br>Detail two<br>Detail three<br>FIRST_ROW_END |`;
+    const manual = await print(`${filler(20)}\n\n${markdown}`);
+    const start = once(manual, "FIRST_ROW_START");
+    const end = once(manual, "FIRST_ROW_END");
+    expect(end.page).toBe(start.page);
+    const headers = positions(manual, "TALL_HEADER_START");
+    expect(headers).toHaveLength(1);
+    expect(headers[0].page).toBe(start.page);
+    expect(once(manual, "TALL_HEADER_END").page).toBe(start.page);
+    expect(headers[0].y).toBeGreaterThan(start.y);
+    insideContent(manual, [start, end, ...headers, once(manual, "TALL_HEADER_END")]);
+  }, 40_000);
+
   it("continues an oversized table row without clipping or dropping its cell content", async () => {
     const tokens = Array.from({ length: 65 }, (_, index) => `TALL_${String(index + 1).padStart(2, "0")}`);
     const manual = await print(`${filler(2)}\n\n${table([`| TALL_ROW | ${tokens.join("<br>")} |`])}\n\nAFTER_TALL_ROW`);
